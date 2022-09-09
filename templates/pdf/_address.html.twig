@@ -1,0 +1,12 @@
+<strong>{{ name }}</strong>
+<br>
+Addresse :<br>
+{{ line1 }}<br>
+{% if line2 is defined and line2 is not null and line2 is not empty %}
+{{ line2 }}<br>
+{% endif %}
+{{ line3 }}
+<br><br>
+Mobile : {{ phone }}
+<br><br>
+Email : {{ email }}

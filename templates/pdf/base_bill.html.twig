@@ -1,0 +1,149 @@
+{% apply spaceless %}
+    <body>
+    <h1 style="margin: 3rem 0;text-align: center">{% block title '' %} de location saisonnière nº {{ numeric_id }}</h1>
+    <style>
+        body {
+            font-size: 12px;
+            /*font-family: 'Courier New';*/
+        }
+
+        table {
+            width: 100%;
+        }
+    </style>
+    <table style="margin-top: 1rem;border-collapse: separate">
+        <tbody>
+        <tr>
+            <td width="50%">
+                {% include 'pdf/_address.html.twig' with {
+                    'name': 'Olivier et Myriam DOMERGUE',
+                    'line1': '35 Bis Rue Docteur Givreaud',
+                    'line2': '',
+                    'line3': '71600 Paray-Le-Monial',
+                    'phone': '06 61 82 56 95',
+                    'email': 'myriamdomergue1958@gmail.com',
+                } %}
+            </td>
+            <td width="50%">
+                {% include 'pdf/_address.html.twig' with {
+                    'name': address.name,
+                    'line1': address.line1,
+                    'line2': address.line2,
+                    'line3': address.line3,
+                    'phone': address.phone,
+                    'email': address.email,
+                } %}
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <table style="margin-top: 2rem;">
+        <tbody>
+        <tr>
+            <td width="50%"></td>
+            <td width="50%" style="margin-top: 2rem;">
+                Fait à Paray-le-monial, le {{ created_at }}
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <table style="margin-top: 3rem;">
+        <tr>
+            <td width="20%">Séjour</td>
+            <td>du {{ from }} au {{ to }}</td>
+        </tr>
+        <tr>
+            <td width="20%">Nb locataires</td>
+            <td>{{ total_occupants }}</td>
+        </tr>
+        {% if 0 != children_count %}
+            <tr>
+                <td width="20%">Nb locataires</td>
+                <td>{{ children_count }}</td>
+            </tr>
+        {% endif %}
+        <tr>
+            <td height="50px"></td>
+            <td height="50px"></td>
+        </tr>
+        <tr>
+            <td width="20%">Type de location</td>
+            <td>Villa</td>
+        </tr>
+        <tr>
+            <td width="20%">Adresse</td>
+            <td>Pointe Savanne - 14 Traverse du cassier jaune</td>
+        </tr>
+        <tr>
+            <td width="20%">Code postal - Commune</td>
+            <td>97310 Le Robert</td>
+        </tr>
+    </table>
+    <style>
+        .total-th {
+            padding: 0.9rem;
+            margin-bottom: 0px;
+            border-spacing: 0;
+        }
+        .item-row {
+            padding: .2rem;
+            padding-left: .4rem;
+        }
+    </style>
+    <table style="margin-top: 3rem;border-collapse: collapse;">
+        <thead style="padding-bottom: 1rem;background-color: #b7b7b7;">
+        <tr>
+            <th class="total-th">Désignation</th>
+            <th class="total-th">Quantité</th>
+            <th class="total-th">P.U HT</th>
+            <th class="total-th">TVA</th>
+            <th class="total-th">Total TTC</th>
+        </tr>
+        </thead>
+        <tbody style="border-top: 1rem solid transparent;">
+        <tr>
+            <td class="item-row">Nuitées</td>
+            <td class="item-row">{{ pricing.nightsIn }}</td>
+            <td class="item-row">{{ pricing.total_amount }}</td>
+            <td class="item-row">20%</td>
+            <td class="item-row">{{ pricing.total_amount }}</td>
+        </tr>
+        <tr>
+            <td class="item-row">Frais de ménage</td>
+            <td class="item-row">1</td>
+            <td class="item-row">{{ pricing.household_tax }}</td>
+            <td class="item-row">20%</td>
+            <td class="item-row">{{ pricing.household_tax }}</td>
+        </tr>
+        <tr>
+            <td class="item-row">Taxe de séjour</td>
+            <td class="item-row">1</td>
+            <td class="item-row">{{ pricing.tourist_tax }}</td>
+            <td class="item-row">0%</td>
+            <td class="item-row">{{ pricing.tourist_tax }}</td>
+        </tr>
+        </tbody>
+    </table>
+    <table style="margin: 3rem 0;border-collapse: collapse;border-spacing: 0">
+        <tbody>
+        <tr>
+            <td width="25%"></td>
+            <td width="15%"></td>
+            <td width="35%" style="padding: .5rem;background-color: #b7b7b7">TOTAL HT</td>
+            <td width="25%" style="padding: .5rem;background-color: #b7b7b7;font-size:18px;"><strong>{{ pricing.total_amount }}</strong></td>
+        </tr>
+        <tr>
+            <td width="25%"></td>
+            <td width="15%"></td>
+            <td width="35%" style="padding: .5rem;background-color:#434343;color:white;">TOTAL TTC</td>
+            <td width="25%" style="padding: .5rem;background-color:#434343;color:white;font-size:18px;"><strong>{{ pricing.total_amount }} </strong></td>
+        </tr>
+        <tr>
+            <td width="25%"></td>
+            <td width="15%"></td>
+            <td style="font-size: 11px;color: #676767">TVA non applicable, article 293 B du Code général des Impôts</td>
+        </tr>
+        </tbody>
+    </table>
+    </body>
+{% endapply %}

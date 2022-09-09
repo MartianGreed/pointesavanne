@@ -1,0 +1,144 @@
+
+default:
+  autoload:
+    '': './config/bootstrap.php'
+  suites:
+    register:
+      paths:
+        - ./features/customer/00_register.feature
+      contexts:
+        - Features\Context\Customer\CustomerRegistrationContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Customer\PasswordEncoder'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Mailer'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@register"
+
+    login:
+      paths:
+        - ./features/customer/01_login.feature
+      contexts:
+        - Features\Context\Customer\CustomerLoginContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Customer\PasswordEncoder'
+            - '@App\Domain\Customer\AuthenticationGateway'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@login"
+
+    profile:
+      paths:
+        - ./features/customer/02_save_profile.feature
+      contexts:
+        - Features\Context\Customer\CustomerSaveProfileContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Customer\SaveProfile\SaveProfileUseCase'
+            - '@App\Domain\Customer\CustomerRepository'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@profile"
+
+    recover_password:
+      paths:
+        - ./features/customer/03_recover_password.feature
+      contexts:
+        - Features\Context\Customer\RecoverPasswordContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Customer\RecoverPassword\RecoverPasswordUseCase'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@recover_password"
+
+    update_password:
+      paths:
+        - ./features/customer/04_update_password_from_recover.feature
+      contexts:
+        - Features\Context\Customer\UpdatePasswordContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Customer\UpdatePassword\UpdatePasswordUseCase'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Customer\AuthenticationGateway'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@update_password"
+
+    quotation_request:
+      paths:
+        - ./features/booking/00_quotation_request.feature
+      contexts:
+        - Features\Context\Booking\QuotationRequestContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Infrastructure\Behat\BookingUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Booking\Quotation\QuotationUseCase'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Customer\AuthenticationGateway'
+            - '@App\Domain\Mailer'
+            - '@App\Domain\AsyncMessage'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@quotation_request"
+
+    quotation_generation:
+      paths:
+        - ./features/booking/01_quotation_generation.feature
+      contexts:
+        - Features\Context\Booking\QuotationGenerationContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Infrastructure\Behat\BookingUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Booking\Quotation\QuotationUseCase'
+            - '@App\Domain\Booking\QuotationGeneration\QuotationGenerationUseCase'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Customer\AuthenticationGateway'
+            - '@App\Domain\Mailer'
+            - '@App\Domain\AsyncMessage'
+            - '@App\Domain\FileLocator'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@quotation_generation"
+
+    quotation_signed:
+      paths:
+        - ./features/booking/02_quotation_signed.feature
+      contexts:
+        - Features\Context\Booking\QuotationSignedContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Infrastructure\Behat\BookingUseCaseManager'
+            - '@App\Domain\Booking\QuotationSigned\QuotationSignedUseCase'
+            - '@App\Domain\Shared\PDF\PDFGenerator'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Customer\AuthenticationGateway'
+            - '@App\Domain\Mailer'
+            - '@App\Domain\AsyncMessage'
+            - '@App\Domain\FileLocator'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@quotation_signed"
+
+    quotation_validation:
+      paths:
+        - ./features/booking/03_quotation_validation.feature
+      contexts:
+        - Features\Context\Booking\QuotationValidationContext:
+            - '@App\Infrastructure\Behat\CustomerUseCaseManager'
+            - '@App\Infrastructure\Behat\BookingUseCaseManager'
+            - '@App\Domain\Customer\Register\RegistrationUseCase'
+            - '@App\Domain\Booking\Quotation\QuotationUseCase'
+            - '@App\Domain\Booking\QuotationGeneration\QuotationGenerationUseCase'
+            - '@App\Domain\Customer\CustomerRepository'
+            - '@App\Domain\Customer\AuthenticationGateway'
+            - '@App\Domain\Mailer'
+            - '@App\Domain\AsyncMessage'
+            - '@App\Domain\FileLocator'
+      services: Features\Context\ContextContainer
+      filters:
+        tags: "@quotation_validation"

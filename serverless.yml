@@ -1,0 +1,22 @@
+service: app
+
+provider:
+    name: aws
+    region: eu-west-3
+    runtime: provided.al2
+
+plugins:
+    - ./vendor/bref/bref
+
+functions:
+    home:
+        handler: App\Application\Controller\HomeController
+        layers:
+            - ${bref:layer.php-81}
+        events:
+            - httpApi: 'GET /'
+
+# Exclude files from deployment
+package:
+    patterns:
+        - '!tests/**'

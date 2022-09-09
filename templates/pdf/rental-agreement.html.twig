@@ -1,0 +1,366 @@
+{% apply spaceless %}
+    <body style="padding: .5rem; border: 1px solid black;font-size:12px;">
+        <div style="padding: .5rem">
+            <div style="text-align: center">
+                <h2 style="text-transform: uppercase;">Contrat de location saisonnière<br>en meublé de tourisme</h2>
+            </div>
+
+            <style>
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+
+                .parts-table th {
+                    padding: .5rem;
+                }
+
+                .parts-table td {
+                    padding: 1rem;
+                }
+
+                .parts-table th, .parts-table td {
+                    border: 1px solid black;
+                }
+            </style>
+            <table class="parts-table" style="margin-top: 3rem; margin-bottom: 1rem;">
+                <thead>
+                <tr>
+                    <th>
+                        Entre le propriétaire
+                    </th>
+                    <th>
+                        Et le locataire
+                    </th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>
+                        {% include 'pdf/_address.html.twig' with {
+                            'name': 'Olivier et Myriam DOMERGUE',
+                            'line1': '35 Bis Rue Docteur Givreaud',
+                            'line2': '',
+                            'line3': '71600 Paray-Le-Monial',
+                            'phone': '06 61 82 56 95',
+                            'email': 'myriamdomergue1958@gmail.com',
+                        } %}
+                    </td>
+                    <td>
+                        {% include 'pdf/_address.html.twig' with {
+                            'name': 'Valentin DOSIMONT',
+                            'line1': '25 place Grégoire Bordillon',
+                            'line2': '',
+                            'line3': '49100 Angers',
+                            'phone': '07 82 84 82 27',
+                            'email': 'valentin@pupucecorp.com',
+                        } %}
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <div style="padding: 1rem;">
+                <style>
+                    strong {
+                        padding: 1rem 0;
+                    }
+                </style>
+                <div>Il a été convenu ce qui suit :</div>
+                <strong>OBJET DU CONTRAT DE LOCATION SAISONNIÈRE</strong>
+                <p>
+                    Les parties conviennent que la location faisant l'objet des présentes est une location saisonnière, dont la
+                    durée ne peut excéder 90 jours. Le Bailleur déclare être propriétaire du logement et en avoir la libre
+                    disposition et la pleine jouissance durant la période de location définie dans les présentes. Le Bailleur
+                    déclare avoir confié la gestion opérationnelle du logement à une Conciergerie qui sera l’interlocuteur du
+                    locataire en particulier le jour de son arrivée, durant la durée de la location en cas de besoin, et le jour
+                    de son départ. De même, l’entretien de la piscine et du jardin sont confiés à des prestataires extérieurs.
+                </p>
+
+                <strong>DESCRIPTION DU LOGEMENT</strong>
+                <p>
+                    Le logement loué est une villa de 5 pièces d’une capacité maximale de 7 personnes, d’une surface habitable
+                    de 130 m² auquel s’ajoute une véranda de 40m2, une piscine de 8,00m x 3,50m (profondeur de 1,20m à 1,60m),
+                    un deck au bord de la piscine de 70m2 et un carbet de 24m2 sur le deck. La villa, située à Pointe Savane au
+                    14 Traverse du Cassier Jaune – 97310 Le Robert, est composée de 3 chambres ventilées naturellement avec
+                    climatiseur et ventilateur, 2 salles d’eau avec douche et WC, d’un WC indépendant, d’une cuisine équipée
+                    avec lave-vaisselle, plaque induction, four et micro-onde, d’une buanderie avec lave-linge, frigidaire et
+                    congélateur. Une plancha à gaz est à disposition. Un lit et une chaise pour bébé sont disponibles sur
+                    demande. Télévision, lecteur DVD et WiFi sont disponibles.
+                </p>
+
+                <strong>NOMBRE D’OCCUPANTS</strong>
+                <p>
+                    X personnes - X adulte(s) (+18 ans), 0 adolescent(s), 0 enfant(s) (-12ans), 0 bébé(s) (-2 ans)<br><br>
+                    Aucun occupant supplémentaire ne peut être accepté car la maison est déclarée à la Mairie pour un nombre
+                    maximum de 7 personnes.
+                </p>
+            </div>
+        </div>
+    </body>
+    <body style="padding: .5rem; border: 1px solid black;font-size:12px;">
+        <div style="padding: .5rem">
+            <div style="text-align: center">
+                <h2 style="text-transform: uppercase;">Devis</h2>
+                <h2 style="text-transform: uppercase;">Contrat de location saisonnière<br>en meublé de tourisme</h2>
+            </div>
+
+            <h3><strong style="text-transform: uppercase">Durée du contrat :</strong> X nuits</h3>
+            <style>
+                .begin-table, th, td {
+                    border: none;
+                }
+            </style>
+            <table class="begin-table">
+                <tbody>
+                    <tr>
+                        <td>
+                            Entrée le : XX/XX/XXXX <br>
+                            à partir de : XXXX
+                        </td>
+                        <td>
+                            Sortie le : XX/XX/XXXX <br>
+                            avant : XXXX
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3><strong style="text-transform: uppercase">Montant de la location :</strong> X XXX €</h3>
+
+            <p>
+                Le prix inclut la location du logement pour le nombre de nuits et les dates mentionnées ci-dessus, la fourniture du linge de maison, le ménage et la préparation de la maison avant l’arrivée des locataires.
+            </p>
+            <p>Le prix n’inclut pas :</p>
+            <ul style="list-style-type: decimal;">
+                <li>
+                    La taxe de séjour de xxx,xx €  <u>à régler par chèque</u> à l’ordre de Mr ou Mme DOMERGUE et à remettre à la conciergerie.
+                </li>
+                <li>
+                    La caution de 2 000 €  <u>à régler par chèque</u> à l’ordre de Mr ou Mme DOMERGUE et à remettre à la conciergerie.
+                </li>
+            </ul>
+
+            <p>
+                La gestion de ces règlements par chèque est gratuite. En cas de règlement par espèces ou carte bancaire une commission de gestion de 1,8% devra être appliquée.
+            </p>
+            <p>
+                Le règlement de l’acompte et du solde de la location est à effectuer par virement bancaire sur le compte suivant :
+            </p>
+            <style>
+                .bank-account-table {
+                    padding: 1rem;
+                }
+                .bank-account-table .left {
+                    font-weight: bold;
+                }
+                .bank-account-table .right {
+
+                }
+            </style>
+            <table class="bank-account-table">
+                <tbody>
+                    <tr>
+                        <td class="left">IBAN</td>
+                        <td class="right">FR76 1444 5202 0004 7820 6423 089</td>
+                    </tr>
+                    <tr>
+                        <td class="left">BIC</td>
+                        <td class="right">CEPAFRPP444</td>
+                    </tr>
+                    <tr>
+                        <td class="left">Intitulé</td>
+                        <td class="right">MR ou ME DOMERGUE OLIVIER</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div>
+                <strong>ACOMPTE LOCATION</strong> : X XXX € à la date de signature du présent contrat <br>
+                <strong>SOLDE LOCATION</strong> : X XXX € au plus tard le XX/XX/2022 (attention au délai de virement)
+                <br>
+            </div>
+
+            <p>Fait à Paray-Le-Monial, le xx/xx/2022</p>
+            <style>
+                .signing-table {
+
+                }
+                .signing-table th {
+                    border: none;
+                    padding-bottom: 1rem;
+                }
+                .signing-table td {
+                    border: 1px solid black;
+                }
+            </style>
+            <table class="signing-table">
+                <thead>
+                    <tr>
+                        <th width="50%"><strong>Le propriétaire</strong></th>
+                        <th width="50%" style="font-weight: normal">
+                            <strong>Le locataire, signature avec la mention</strong><br>
+                            " lu et approuvé "
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td width="50%" height="150px"></td>
+                        <td width="50%" height="150px"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </body>
+    <body style="padding: .5rem; border: 1px solid black;font-size:12px;">
+        <div style="padding: .5rem">
+            <div style="text-align: center">
+                <h2 style="text-transform: uppercase;">Conditions générales</h2>
+            </div>
+
+            <h3>
+                Préambule :
+            </h3>
+            <p>
+                Les présentes conditions générales visent à régir les relations entre Mr et Mme DOMERGUE et le locataire. La réservation implique d'avoir pris connaissance et d'accepter les présentes conditions générales.
+            </p>
+
+            <h3>
+                1) Modalités de réservation :
+            </h3>
+            <p>
+                Votre location sera définitivement confirmée après, d’une part le versement d'un acompte de 50% du montant du séjour par virement bancaire, et d’autre part la signature du contrat, à envoyer au propriétaire signé et paraphé par email ou courrier. Ces deux conditions doivent être respectées pour que la location soit confirmée. Vous recevrez un email de confirmation. Le solde sera dû 30 jours avant l’arrivée. Le locataire devra tenir compte des délais de traitement des virements. En cas de non-respect des délais de règlement, la réservation ne pourra être garantie et la location pourra être annulée de plein droit et sans préavis. Le reste des sommes dues restant exigibles à tout moment par le propriétaire.
+            </p>
+
+            <div style="margin-bottom: .5rem;">
+                <h4 style="display: inline">
+                    1 bis)
+                </h4>
+                <p style="display: inline;">
+                    Pour les réservations de dernière minute (&lt; 30 jours), le règlement total de la location est à régler avant l’arrivée par virement bancaire.
+                </p>
+            </div>
+
+            <h3>
+                2) Conditions et frais d’annulation :
+            </h3>
+            <p>
+                Remboursement à 100 % si annulation à plus de 60 jours de l’arrivée. Remboursement à 50 % si annulation entre 30 et 60 jours de l’arrivée. Pas de remboursement pour les annulations à moins de 30 jours de l’arrivée.
+            </p>
+
+            <div style="margin-bottom: .5rem;">
+                <h4 style="display: inline">
+                    2 bis)
+                </h4>
+                <p style="display: inline;">
+                    Conditions et frais d’annulation COVID : Pendant toute la période de la pandémie de la COVID, des conditions spécifiques s'appliquent. En cas de confinement, d'impossibilité de voyager par décision gouvernementale ou préfectorale ou si vous êtes dans l'impossibilité d'embarquer sur votre vol/bateau suite à un test positif à la COVID, et sur présentation du justificatif, le séjour est reportable sans frais. En cas d’impossibilité de report dûment justifiée, le séjour est remboursable à 100 %. Toute annulation n'entrant pas dans les cas spécifiés ici se verront appliquer le barème de frais d'annulation précisé dans l'article 2 ci-dessus.
+                </p>
+            </div>
+
+
+            <h3>
+                3) Conciergerie :
+            </h3>
+            <p>
+                A réception du solde de la location, et au plus tard 30 jours avant votre arrivée, nous vous confirmerons les coordonnées de votre interlocuteur de conciergerie qui sera responsable de préparer la maison avant votre arrivée (lits faits, ménage intégral, maison ouverte), de vous accueillir, de faire l’état des lieux d’entrée et la remise des clés et des consignes pratiques. De même, le concierge sera présent le jour du départ pour l’état des lieux de sortie et la remise des clés.
+            </p>
+
+            <h3>
+                4) Arrivée – Départ :
+            </h3>
+            <p>
+                Le séjour commence à 17h et se termine à 11h, sauf conditions définies à l’avance avec le propriétaire. Le transfert de l’aéroport au logement n’est pas inclus dans le prix. Il est indispensable de louer une voiture. L’heure d’arrivée ainsi que le numéro de vol doivent être précisés à l’avance pour l’organisation de l’accueil des locataires.
+            </p>
+
+            <h3>
+                5) Caution :
+            </h3>
+            <p>
+                Le contrat stipule la remise d’une caution de 2 000 € au propriétaire. Cette caution sera restituée dans les 7 jours suivant le départ.
+                Toute anomalie, objet cassé devra être signalé à la Conciergerie, durant le séjour, ou au plus tard lors de l’état des lieux de sortie. Passé ce délai, aucune réclamation ne sera prise en compte.
+                Une retenue sur la caution à l’appréciation du propriétaire pourra être faite en cas d’objets manquants, cassés ou encore de restitution de l’hébergement dans un état de désordre nécessitant des heures complémentaires de ménage par rapport à celles normalement prévues entre deux réservations.
+                Si les dommages occasionnés sont estimés supérieurs à la caution versée en début de séjour, un dossier au contentieux faisant au besoin jouer les assurances des différentes parties sera ouvert par le propriétaire de l’hébergement. Il est fortement recommandé aux locataires de demander à l’assureur de leur habitation principale une extension « d’assurance villégiature » (gratuite dans la plupart des cas) pour la durée de leur séjour dans l’hébergement loué afin de se prémunir contre ce risque.
+                Les occupants doivent veiller en permanence au bon entretien des locaux et les restituer dans un bon état de propreté. Avant leur départ, les locataires s’engagent à laisser la villa dans l’état où ils l’ont trouvé, vaisselle faite et rangée, poubelles vidées, plancha nettoyée et rangée, four et micro-onde nettoyés.
+                Le non-respect de cette clause entraînera une retenue sur la caution.
+            </p>
+
+            <h3>
+                6) Règles d’usage :
+            </h3>
+            <p>
+                Aucun occupant supplémentaire ne sera accepté. Le locataire utilise les locaux à titre de résidence temporaire de vacances, à l’exclusion de toute utilisation commerciale ou professionnelle. Toute sous-location totale ou partielle est interdite.
+                Pour des raisons d’hygiène et de sécurité,
+                Il est interdit d’utiliser des objets en verre aux abords de la piscine ou dans la piscine compte tenu du risque de blessures. Des objets en plastique sont à votre disposition dans la vaisselle disponible.
+                il est interdit de manger dans les chambres ou d’y amener de la nourriture.
+                La maison étant un hébergement non-fumeur, il est interdit de fumer à l’intérieur.
+                Les réceptions sont interdites, le non-respect de cette règle entraînera le départ du client sans possibilité de remboursement.
+                Le locataire respecte les règles de voisinage et les règles normales de vie. Tout bruit gênant, causé sans nécessité ou dû à un défaut de précaution, est interdit de jour comme de nuit, notamment par leur intensité, leur durée ou leur caractère répétitif, quelle qu’en soit leur provenance ; en particulier au-delà de 22h du lundi au samedi, les dimanches et jours fériés à partir de 12h.
+            </p>
+
+            <h3>
+                7) Responsabilité :
+            </h3>
+            <p>
+                Le logement est assuré par le propriétaire, qui s’engage à le livrer en parfait état de propreté et d’entretien, conforme à la description dans le présent contrat. Cependant, il ne saurait être responsable en cas de vol, perte, d’accident, dommage, ou autres problèmes qui pourraient survenir à l’égard de tous les locataires ou de leurs biens. Les locataires sont donc invités à souscrire une assurance. Une fois la réservation confirmée, le propriétaire garantit la location conformément au contrat de réservation. En cas de défaillance ou en cas d’incapacité d’assurer la prestation par le propriétaire, le propriétaire s’engage à louer une autre villa offrant à minima des qualités équivalentes de prestation.
+            </p>
+
+
+            <h3>
+                8) Nuisances occasionnées :
+            </h3>
+            <p>
+                Le client a l’obligation de veiller à ce que la tranquillité du voisinage ne soit pas troublée par son fait tout particulièrement aux abords de la piscine.
+            </p>
+
+            <h3>
+                9) Aléas :
+            </h3>
+            <p>
+                Le propriétaire ne peut être tenu responsable des préjudices subis en cas de grève, annulation de vols, ou de nuisances occasionnées par des événements situés à côté du bien loué tels que des réceptions, travaux ou autres.
+            </p>
+
+            <h3>
+                10) Sécurité des enfants :
+            </h3>
+            <p>
+                La villa dispose d’une piscine sécurisée au moyen d’une barrière de sécurité amovible conforme aux normes européennes avec deux portes d’accès fermées par un crochet avec ressort. Ces deux portes doivent être fermées en permanence avec le crochet enclenché. Dans tous les cas, les locataires sont seuls responsables de la vigilance et de la sécurité des enfants les accompagnant. La responsabilité du propriétaire ne saurait être engagée en cas d’accident.
+            </p>
+
+            <h3>
+                11) Catastrophes naturelles ou extraordinaires :
+            </h3>
+            <p>
+                En cas de cyclone, de catastrophe naturelle ou extraordinaire, obligeant les locataires à quitter le logement ou la Martinique avant la fin de la location, nous ne pourrons ni rembourser les jours non occupés, ni supporter les frais supplémentaires entraînés par l’événement.
+            </p>
+
+            <h3>
+                12) Juridiction compétente en cas de litige :
+            </h3>
+            <p>
+                La juridiction compétente en cas de litige est le tribunal mixte de Fort de France. Le présent contrat est soumis à la loi française.
+            </p>
+
+            <div style="margin-top: 2rem;">
+                <p>Fait à Paray-Le-Monial, le xx/xx/2022</p>
+                <table class="signing-table">
+                    <thead>
+                    <tr>
+                        <th width="50%"><strong>Le propriétaire</strong></th>
+                        <th width="50%" style="font-weight: normal">
+                            <strong>Le locataire, signature avec la mention</strong><br>
+                            " lu et approuvé "
+                        </th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td width="50%" height="150px"></td>
+                        <td width="50%" height="150px"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+{% endapply %}

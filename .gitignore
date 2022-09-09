@@ -1,0 +1,11 @@
+.DS_Store
+.idea/
+.env
+var
+tmp
+coverage/
+.phpunit.result.cache
+
+vendor
+node_modules
+coverage
