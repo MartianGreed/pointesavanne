@@ -32,4 +32,9 @@ export class InMemoryMailer implements Mailer {
   getSent(): Mail[] {
     return this.sent
   }
+
+  clearSent(): void {
+    this.sent = []
+    this.toSend = []
+  }
 }
