@@ -9,3 +9,5 @@ coverage/
 vendor
 node_modules
 coverage
+reports
+.claude-modified-files

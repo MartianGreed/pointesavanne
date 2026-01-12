@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  bun-tests:
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,6 +14,14 @@ jobs:
         run: bun install
       - name: Run typecheck
         run: bun run typecheck
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install Dependencies
+        run: bun install
       - name: Run tests with coverage
         run: bun run test:coverage:lcov
       - name: Upload coverage to Codecov
@@ -22,3 +30,20 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
           verbose: true
+
+  feature-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install Dependencies
+        run: bun install
+      - name: Run feature tests
+        run: bun run test:features
+      - name: Upload Cucumber Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cucumber-report
+          path: reports/cucumber-report.html
+          retention-days: 14

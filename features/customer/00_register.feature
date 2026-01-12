@@ -21,7 +21,7 @@ Feature: Customer registration
       | cloe.maz@gmail.com         | cloemaz29  | 0602030405  | Cloé          | Mazeau   |
       | jean-baptiste@domergue.net | jbdomergue | 0603040506  | Jean-Baptiste | Domergue |
     When the customer wants to register
-    Then RegistrationResponse should contain one error message saying "Customer with email valentin@pupucecorp.com already exists. Please recover your password"
+    Then RegistrationResponse should contain one error message saying "Customer with email \"valentin@pupucecorp.com\" already exists"
 
   Scenario: Registering with a bad password
     Given a request with following informations "valentin@pupucecorp.com", "val", "0782848227", "Valentin", "Dosimont"
