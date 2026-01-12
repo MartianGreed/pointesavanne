@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans text-luxury-charcoal antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-8 py-4 text-sm font-medium tracking-widest uppercase transition-all duration-300;
+    @apply bg-luxury-gold text-white hover:bg-luxury-charcoal;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-8 py-4 text-sm font-medium tracking-widest uppercase transition-all duration-300;
+    @apply border-2 border-luxury-charcoal text-luxury-charcoal hover:bg-luxury-charcoal hover:text-white;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 border border-gray-300 focus:border-luxury-gold focus:ring-1 focus:ring-luxury-gold outline-none transition-all;
+  }
+
+  .section-heading {
+    @apply text-4xl md:text-5xl font-serif font-medium text-luxury-charcoal tracking-wide;
+  }
+
+  .section-subheading {
+    @apply text-lg md:text-xl text-gray-600 font-light tracking-wide;
+  }
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+  }
+}
