@@ -1,0 +1,11 @@
+{
+  "default": {
+    "paths": ["cucumber/features/**/*.feature"],
+    "require": ["cucumber/step-definitions/**/*.ts", "cucumber/support/**/*.ts"],
+    "requireModule": ["tsx"],
+    "format": ["@cucumber/pretty-formatter"],
+    "formatOptions": {
+      "snippetInterface": "async-await"
+    }
+  }
+}

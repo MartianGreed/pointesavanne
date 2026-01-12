@@ -1,11 +1,11 @@
 import type { PDFGenerator } from '../../domain/shared/pdf/pdf-generator.ts'
+import type { FileLocator } from '../../domain/shared/file-locator.ts'
 import { File } from '../../domain/shared/pdf/file.ts'
-import { LocalFileLocator } from '../file/local-file-locator.ts'
 
 export class BunPdfGenerator implements PDFGenerator {
   constructor(
     private readonly templateEngine: TemplateEngine,
-    private readonly fileLocator: LocalFileLocator
+    private readonly fileLocator: FileLocator
   ) {}
 
   async generate(template: string, filename: string): Promise<File> {

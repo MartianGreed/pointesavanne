@@ -7,10 +7,14 @@
   "scripts": {
     "dev": "bun run --watch index.ts",
     "test": "bun test",
+    "test:cucumber": "bunx cucumber-js",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@cucumber/cucumber": "^10.9.0",
+    "@cucumber/pretty-formatter": "^2.4.1",
+    "@types/bun": "latest",
+    "tsx": "^4.21.0"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -16,10 +16,12 @@ export class Price {
   }
 
   getFormattedAmount(): string {
-    return this.amount.toLocaleString('fr-FR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
+    return this.amount
+      .toLocaleString('fr-FR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+      .replace(/\u202f/g, ' ')
   }
 
   getCurrency(): string {

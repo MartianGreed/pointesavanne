@@ -1,1 +1,3 @@
-export interface Message {}
+export interface Message {
+  bookingId: string
+}
