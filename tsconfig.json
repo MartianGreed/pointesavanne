@@ -24,5 +24,5 @@
       "@application/*": ["ts/application/*"]
     }
   },
-  "include": ["index.ts", "ts/**/*", "tests/**/*"]
+  "include": ["index.ts", "ts/**/*", "tests/**/*", "features/**/*"]
 }

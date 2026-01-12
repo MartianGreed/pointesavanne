@@ -44,7 +44,7 @@ Feature: Estimation
     Given "valentin@pupucecorp.com" is logged in
     And a QuotationRequest to villa named "Villa de standing - Pointe Savanne" from "30/05/2022" to "13/05/2022" for 4 adults and 2 children
     When the customer submits the QuotationRequest
-    Then an exception "App\Domain\Booking\Exception\InvalidBookingEndDateException" should be thrown with message "End date (13/05/2022) cannot be before beginning date (30/05/2022)"
+    Then an exception "App\Domain\Booking\Exception\InvalidBookingEndDateException" should be thrown with message "End date 13/05/2022 cannot be before start date 30/05/2022"
 
   Scenario: Booking is not available for given time period
     Given "valentin@pupucecorp.com" is logged in
@@ -53,7 +53,7 @@ Feature: Estimation
       | jean-baptiste@domergue.net | 28/05/2022 | 04/06/2022 | 2      | 0        |
     And a QuotationRequest to villa named "Villa de standing - Pointe Savanne" from "30/05/2022" to "13/06/2022" for 4 adults and 2 children
     When the customer submits the QuotationRequest
-    Then an exception "App\Domain\Booking\Exception\BookingUnavailableException" should be thrown with message "Booking is not available from 30/05/2022 to 13/06/2022"
+    Then an exception "App\Domain\Booking\Exception\BookingUnavailableException" should be thrown with message "Booking is unavailable for dates 30/05/2022 - 13/06/2022"
 
   Scenario: Simple booking for period
     Given "valentin@pupucecorp.com" is logged in
