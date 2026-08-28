@@ -1,0 +1,327 @@
+import { AggregateStore, EventStore, Inbox, Projection } from "@structure-ai/eventsourcing"
+import { Booking, BookingId } from "./booking/booking.ts"
+import { bookingRegistry } from "./events.ts"
+import { ViewModel, ViewProjection, ViewStore } from "@structure-ai/viewmodel"
+import * as SqlClient from "@effect/sql/SqlClient"
+import { Context, Effect, Schema } from "effect"
+import type { AppEvent } from "./events.ts"
+import { profileRegistry, registry } from "./events.ts"
+import { CustomerId, CustomerProfile } from "./customer/profile.ts"
+import { dates, formatEuros } from "./booking/pricing.ts"
+import { Mailer } from "./infra.ts"
+import { GenerateQuotation } from "./messages/index.ts"
+import { CommandBus } from "@structure-ai/cqrs"
+import { asSystem } from "./policy.ts"
+import type { AppConfig } from "./settings.ts"
+
+// ---------------------------------------------------------------------------
+// View models (the query side). One table per view, one writing projection
+// per table, shaped for their consumers and rebuildable from the events.
+// ---------------------------------------------------------------------------
+
+export const BookingView = ViewModel.define({
+  name: "BookingView",
+  fields: {
+    id: Schema.String, // bookingId
+    customerId: Schema.String,
+    customerEmail: Schema.String,
+    status: Schema.String,
+    villaId: Schema.String,
+    villaName: Schema.String,
+    fromDay: Schema.String, // ISO day — `from`/`to` are reserved SQL words
+    toDay: Schema.String,
+    adultsCount: Schema.Number,
+    childrenCount: Schema.Number,
+    nights: Schema.Number,
+    totalAmount: Schema.Number,
+    unrankedTouristTax: Schema.Number,
+    rankedTouristTax: Schema.Number,
+    depositAmount: Schema.Number,
+    householdAmount: Schema.Number,
+    pdfPath: Schema.optional(Schema.String),
+    signedFileName: Schema.optional(Schema.String),
+    rejected: Schema.Boolean,
+  },
+})
+
+export const CustomerProfileView = ViewModel.define({
+  name: "CustomerProfileView",
+  fields: {
+    id: Schema.String, // auth user id
+    email: Schema.String,
+    firstname: Schema.String,
+    lastname: Schema.String,
+    phoneNumber: Schema.String,
+    language: Schema.optional(Schema.String),
+    line1: Schema.optional(Schema.String),
+    line2: Schema.optional(Schema.String),
+    line3: Schema.optional(Schema.String),
+  },
+})
+
+/** Typed application config available to projections and handlers. */
+export class AppConfigTag extends Context.Tag("pointesavanne/AppConfig")<AppConfigTag, AppConfig>() {}
+
+/**
+ * The write-side profile — used where a projection must not depend on another
+ * projection's progress (PDF rendering, notification emails): the aggregate
+ * store is authoritative and always current.
+ */
+export const profileOf = (customerId: string) =>
+  Effect.map(
+    AggregateStore.make(CustomerProfile, profileRegistry),
+    (store) => store,
+  ).pipe(
+    Effect.flatMap((store) => store.load(CustomerId.make(customerId))),
+    Effect.map((loaded) => loaded.state),
+  )
+
+// ---------------------------------------------------------------------------
+// Projections hydrating the view tables.
+// ---------------------------------------------------------------------------
+
+export const bookingViews: ViewProjection.ViewProjection<AppEvent, never, EventStore | SqlClient.SqlClient> =
+  ViewProjection.make({
+  name: "booking-views",
+  view: BookingView,
+  registry,
+  when: {
+    BookingRequested: (event, store) =>
+      Effect.flatMap(profileOf(event.customerId), (profile) =>
+        store.upsert({
+          id: event.bookingId,
+          customerId: event.customerId,
+          customerEmail: profile.email ?? "",
+          status: "quotation-requested",
+          villaId: event.villaId,
+          villaName: event.villaName,
+          fromDay: event.from,
+          toDay: event.to,
+          adultsCount: event.adultsCount,
+          childrenCount: event.childrenCount,
+          nights: event.nights,
+          totalAmount: event.pricing.totalAmount,
+          unrankedTouristTax: event.pricing.unrankedTouristTax,
+          rankedTouristTax: event.pricing.rankedTouristTax,
+          depositAmount: event.pricing.depositAmount,
+          householdAmount: event.pricing.householdAmount,
+          rejected: false,
+        }),
+      ).pipe(Effect.orDie),
+    QuotationGenerated: (event, store) =>
+      store
+        .patch(event.bookingId, {
+          pdfPath: event.pdfPath,
+          status: "quotation-awaiting-acceptation",
+        })
+        .pipe(Effect.orDie),
+    QuotationSigned: (event, store) =>
+      store
+        .patch(event.bookingId, {
+          signedFileName: event.fileName,
+          status: "quotation-signed",
+        })
+        .pipe(Effect.orDie),
+    QuotationValidated: (event, store) =>
+      store.patch(event.bookingId, { status: "contract-sent" }).pipe(Effect.orDie),
+    QuotationRejected: (event, store) =>
+      store.patch(event.bookingId, { rejected: true }).pipe(Effect.orDie),
+  },
+})
+
+export const profileViews: ViewProjection.ViewProjection<AppEvent, never, SqlClient.SqlClient> =
+  ViewProjection.make({
+  name: "profile-views",
+  view: CustomerProfileView,
+  registry,
+  when: {
+    ProfileSaved: (event, store) =>
+      store
+        .upsert({
+          id: event.customerId,
+          email: event.email,
+          firstname: event.firstname,
+          lastname: event.lastname,
+          phoneNumber: event.phoneNumber,
+          language: event.language,
+          line1: event.line1,
+          line2: event.line2,
+          line3: event.line3,
+        })
+        .pipe(Effect.orDie),
+  },
+})
+
+// ---------------------------------------------------------------------------
+// Availability: an overlap query over this context's own view table. The
+// typed store only supports equality criteria, so this one query is
+// hand-written SQL. Active bookings block their date range; a rejected
+// quotation releases its dates.
+// ---------------------------------------------------------------------------
+
+export const isVillaAvailable = (villaId: string, from: string, to: string) =>
+  Effect.flatMap(SqlClient.SqlClient, (sql) =>
+    Effect.flatMap(
+      sql`
+        SELECT COUNT(*) AS conflicts FROM booking_view
+        WHERE villa_id = ${villaId}
+          AND from_day < ${to}
+          AND to_day > ${from}
+          AND rejected = false
+      `,
+      (rows) => {
+        const row = (rows as unknown as ReadonlyArray<{ conflicts: number | string }>)[0]
+        return Effect.succeed(row === undefined || Number(row.conflicts) === 0)
+      },
+    ),
+  )
+
+// ---------------------------------------------------------------------------
+// Notifications: emails sent from booking events. Each email is deduplicated
+// by event id through the inbox and suppressed on rebuilds (`live === false`),
+// so replays never resend and a crash between "decided" and "sent" retries.
+// ---------------------------------------------------------------------------
+
+const mailBody = (lines: ReadonlyArray<string>): string => lines.join("\n")
+
+const quotationSummary = (event: Extract<AppEvent, { _tag: "BookingRequested" }>): string =>
+  mailBody([
+    `Séjour : ${event.villaName}`,
+    `Du ${dates.format(dates.parse(event.from))} au ${dates.format(dates.parse(event.to))} (${event.nights} nuits)`,
+    `Occupants : ${event.adultsCount} adulte(s), ${event.childrenCount} enfant(s)`,
+    `Total séjour : ${formatEuros(event.pricing.totalAmount)}`,
+    `Taxe touristique (non classé) : ${formatEuros(event.pricing.unrankedTouristTax)}`,
+    `Taxe touristique (classé 4 étoiles) : ${formatEuros(event.pricing.rankedTouristTax)}`,
+    `Caution : ${formatEuros(event.pricing.depositAmount)}`,
+    `Ménage obligatoire : ${formatEuros(event.pricing.householdAmount)}`,
+  ])
+
+/** Authoritative booking state — never depends on projection progress. */
+const bookingOf = (bookingId: string) =>
+  Effect.flatMap(AggregateStore.make(Booking, bookingRegistry), (store) =>
+    store.load(BookingId.make(bookingId)).pipe(Effect.orDie),
+  )
+
+export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbox | AppConfigTag | EventStore> =
+  Projection.make({
+  name: "notifications",
+  registry,
+  when: {
+    BookingRequested: (event, stored, ctx) => {
+      if (!ctx.live) return Effect.void
+      return Inbox.dedupe("notifications", stored.metadata.eventId)(
+        Effect.gen(function* () {
+          const config = yield* AppConfigTag
+          const profile = yield* profileOf(event.customerId).pipe(Effect.orDie)
+          const mailer = yield* Mailer
+
+          const summary = quotationSummary(event)
+          yield* mailer.send({
+            to: config.adminMail,
+            subject: `Nouvelle demande de devis — ${event.bookingId}`,
+            body: mailBody([
+              `Le client ${profile.firstname ?? ""} ${profile.lastname ?? ""} (${profile.email ?? ""}) a demandé un devis.`,
+              "",
+              summary,
+            ]),
+          })
+          yield* mailer.send({
+            to: profile.email ?? "",
+            subject: "Votre demande de devis — Villa Pointe Savanne",
+            body: mailBody([
+              `Bonjour ${profile.firstname ?? ""},`,
+              "",
+              "Nous avons bien reçu votre demande de devis :",
+              "",
+              summary,
+              "",
+              "Nous reviendrons vers vous très rapidement avec votre devis.",
+            ]),
+          })
+        }),
+      ).pipe(Effect.asVoid)
+    },
+    QuotationGenerated: (event, stored, ctx) => {
+      if (!ctx.live) return Effect.void
+      return Inbox.dedupe("notifications", stored.metadata.eventId)(
+        Effect.gen(function* () {
+          const { state } = yield* bookingOf(event.bookingId)
+          const profile = yield* profileOf(state.customerId ?? "").pipe(Effect.orDie)
+          const mailer = yield* Mailer
+          yield* mailer.send({
+            to: profile.email ?? "",
+            subject: "Votre devis — Villa Pointe Savanne",
+            body: mailBody([
+              "Bonjour,",
+              "",
+              `Votre devis (${event.pdfPath}) est disponible dans votre espace client.`,
+              "Après acceptation, merci de le signer et de le téléverser depuis votre espace.",
+            ]),
+          })
+        }),
+      ).pipe(Effect.asVoid)
+    },
+    QuotationSigned: (event, stored, ctx) => {
+      if (!ctx.live) return Effect.void
+      return Inbox.dedupe("notifications", stored.metadata.eventId)(
+        Effect.gen(function* () {
+          const config = yield* AppConfigTag
+          const mailer = yield* Mailer
+          yield* mailer.send({
+            to: config.adminMail,
+            subject: `Devis signé — ${event.bookingId}`,
+            body: mailBody([
+              "Un client a signé et téléversé son devis.",
+              "",
+              `Document : ${event.fileName}`,
+              `Réservation : ${event.bookingId}`,
+            ]),
+          })
+        }),
+      ).pipe(Effect.asVoid)
+    },
+  },
+})
+
+// ---------------------------------------------------------------------------
+// The quotation generator: reacts to BookingRequested by dispatching the
+// GenerateQuotation command (which renders + stores the PDF and advances the
+// aggregate). Idempotent through the inbox and tolerant of an
+// already-generated booking, so at-least-once delivery never wedges it.
+// ---------------------------------------------------------------------------
+
+export const quotationGenerator: Projection.Projection<AppEvent, never, Inbox | CommandBus> = {
+  name: "quotation-generator",
+  registry,
+  when: {
+    BookingRequested: (event, stored, ctx) => {
+      if (!ctx.live) return Effect.void
+      return Inbox.dedupe("quotation-generator", stored.metadata.eventId)(
+        asSystem(
+          Effect.flatMap(CommandBus, (bus) =>
+            bus
+              .dispatch(GenerateQuotation, { bookingId: event.bookingId })
+              .pipe(
+                Effect.catchTag("InvariantViolation", () => Effect.void),
+                Effect.orDie,
+              ),
+          ),
+        ),
+      ).pipe(Effect.asVoid)
+    },
+  },
+}
+
+/** Every projection that runs in the application's worker loop. */
+// deno-lint-ignore no-explicit-any
+export const allProjections: ReadonlyArray<Projection.Projection<AppEvent, never, any>> = [
+  bookingViews.projection,
+  profileViews.projection,
+  notifications,
+  quotationGenerator,
+]
+
+/** Processes every projection to the head — used by tests and the worker. */
+export const runWorkersOnce = Effect.forEach(allProjections, (projection) => Projection.catchup(projection), {
+  discard: true,
+})

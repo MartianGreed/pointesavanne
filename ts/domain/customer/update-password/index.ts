@@ -1,6 +1,0 @@
-export { UpdatePasswordRequest } from './update-password-request.ts'
-export { UpdatePasswordResponse } from './update-password-response.ts'
-export { UpdatePasswordUseCase } from './update-password-use-case.ts'
-export type { PasswordUpdater } from './password-updater.ts'
-export { EmailStrategy } from './email-strategy.ts'
-export { TokenStrategy } from './token-strategy.ts'
