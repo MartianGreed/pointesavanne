@@ -1,14 +1,13 @@
-import { allowAllRateLimiter, inMemoryAuthStore, makeAuth, makeAuthHandler } from "@structure-ai/auth"
-import { layer as busesLayer, CommandBus, IdempotencyStore, QueryBus } from "@structure-ai/cqrs"
+import { layer as busesLayer, IdempotencyStore } from "@structure-ai/cqrs"
 import { InMemoryAll } from "@structure-ai/eventsourcing"
+import { ScenarioWorld, TestAuth, type TestAuth as TestAuthService } from "@structure-ai/bdd"
 import { layerSilent } from "@structure-ai/observability"
 import * as Migrations from "@structure-ai/migrations"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
-import { SqlClient } from "@effect/sql/SqlClient"
-import { Effect, Layer, Redacted, Scope } from "effect"
-import { MutableVillaCatalog, VillaCatalog } from "../src/catalog.ts"
+import { Context, Effect, Layer, type Scope } from "effect"
+import { MutableVillaCatalog } from "../src/catalog.ts"
 import { handlers } from "../src/handlers.ts"
-import { AppAuthTag, tenantConfigOf, type AppAuth } from "../src/auth.ts"
+import { AppAuthTag, tenantConfigOf } from "../src/auth.ts"
 import { FileNotFound, FileStore, Mailer, QuotationPdf, type OutgoingMail, type QuotationBookingData } from "../src/infra.ts"
 import { viewMigrations } from "../src/migrations.ts"
 import { TENANT_ID } from "../src/policy.ts"
@@ -16,28 +15,21 @@ import { DomainConfigTag, type DomainConfig } from "../src/settings.ts"
 import { runWorkersOnce } from "../src/views.ts"
 
 /**
- * The test composition: the production wiring with every durable adapter
+ * The scenario composition: the production wiring with every durable adapter
  * swapped for an in-memory double — in-memory event store, sqlite :memory:
- * view tables, in-memory auth store, recording mailer and file store, and a
- * catalog the BDD fixtures install villas into. The bus authorizer is
- * allow-all; steps pass the acting customer explicitly (`dispatch.actor`),
- * and the HTTP-level test exercises the real policy stack.
+ * view tables, the auth kit's in-memory auth stack, recording mailer and
+ * file store, and a catalog the fixtures install villas into. The bus
+ * authorizer is allow-all; steps pass the acting customer explicitly
+ * (`dispatch.actor`), and the HTTP-level test exercises the real policy
+ * stack. One world per scenario, built inside the scope the feature suite
+ * owns and torn down with it.
  */
-
-export interface RecordedAuthEmail {
-  readonly to: string
-  readonly kind: string
-  readonly token: string
-  readonly url: string
-}
 
 export interface TestDoubles {
   readonly mails: Array<OutgoingMail>
-  readonly authEmails: Array<RecordedAuthEmail>
   readonly files: Map<string, Uint8Array>
   readonly catalog: ReturnType<typeof MutableVillaCatalog>
   readonly config: DomainConfig
-  readonly auth: AppAuth["auth"]
 }
 
 const testConfig: DomainConfig = {
@@ -46,112 +38,149 @@ const testConfig: DomainConfig = {
   ownerEmails: "",
 }
 
-const MailerLive = (mails: Array<OutgoingMail>) =>
-  Layer.succeed(Mailer, Mailer.of({ send: (mail) => Effect.sync(() => void mails.push(mail)) }))
-
-const FileStoreLive = (files: Map<string, Uint8Array>) =>
-  Layer.succeed(
-    FileStore,
-    FileStore.of({
-      save: (path: string, content: Uint8Array) => Effect.sync(() => void files.set(path, content)),
-      read: (path: string) =>
-        Effect.suspend(() => {
-          const content = files.get(path)
-          return content === undefined ? Effect.fail(new FileNotFound()) : Effect.succeed(content)
-        }),
-    }),
+const worldLayerOf = (doubles: TestDoubles, testAuth: TestAuthService) => {
+  // The buses consume the ports; the same port layer instance is also
+  // merged into the world context so steps and projections reach it
+  // (Effect memoizes the shared reference — it builds once).
+  const PortsLive = Layer.mergeAll(
+    Layer.succeed(
+      Mailer,
+      Mailer.of({ send: (mail) => Effect.sync(() => void doubles.mails.push(mail)) }),
+    ),
+    Layer.succeed(
+      FileStore,
+      FileStore.of({
+        save: (path: string, content: Uint8Array) => Effect.sync(() => void doubles.files.set(path, content)),
+        read: (path: string) =>
+          Effect.suspend(() => {
+            const content = doubles.files.get(path)
+            return content === undefined ? Effect.fail(new FileNotFound()) : Effect.succeed(content)
+          }),
+      }),
+    ),
+    Layer.succeed(
+      QuotationPdf,
+      QuotationPdf.of({
+        render: (booking: QuotationBookingData) =>
+          Effect.succeed(new TextEncoder().encode(`devis:${booking.bookingId}:${booking.customer.email}`)),
+      }),
+    ),
+    doubles.catalog.layer,
+    Layer.succeed(DomainConfigTag, testConfig),
   )
 
-const PdfLive = Layer.succeed(
-  QuotationPdf,
-  QuotationPdf.of({
-    render: (booking: QuotationBookingData) =>
-      Effect.succeed(new TextEncoder().encode(`devis:${booking.bookingId}:${booking.customer.email}`)),
-  }),
-)
-
-export interface BuiltWorld {
-  readonly doubles: TestDoubles
-  readonly run: <A, E>(effect: Effect.Effect<A, E, WorldServices>) => Promise<A>
-  readonly fail: <A, E>(effect: Effect.Effect<A, E, WorldServices>) => Promise<E>
-  /** Exit-based execution: no reliance on rejected-promise shapes. */
-  readonly attempt: <A, E>(effect: Effect.Effect<A, E, WorldServices>) => Promise<{ ok: true; value: A } | { ok: false; error: E }>
-  readonly runWorkers: () => Promise<void>
+  const tenantConfig = tenantConfigOf(testConfig.baseUrl)
+  return Layer.mergeAll(
+    busesLayer.pipe(
+      Layer.provide(handlers),
+      Layer.provide(IdempotencyStore.inMemory),
+      Layer.provide(PortsLive),
+    ),
+    PortsLive,
+    Layer.succeed(AppAuthTag, { auth: testAuth.auth, handler: testAuth.authHandler.handler, tenantConfig }),
+  ).pipe(
+    Layer.provideMerge(Migrations.layer(viewMigrations)),
+    Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" })),
+    Layer.provideMerge(InMemoryAll),
+    Layer.provide(layerSilent),
+  )
 }
 
-export const buildTestWorld = (): Effect.Effect<BuiltWorld, never, never> =>
+/** Every service the scenario world carries (buses, stores, ports, config). */
+export type WorldServices = Layer.Layer.Success<ReturnType<typeof worldLayerOf>>
+
+/** A pending quotation request accumulated by `Given` steps. */
+export interface QuotationRequestData {
+  readonly villaName: string
+  readonly from: string
+  readonly to: string
+  readonly adultsCount: number
+  readonly childrenCount: number
+}
+
+export interface UpdatePasswordRequest {
+  readonly email: string | null
+  readonly currentPassword: string | null
+  readonly newPassword: string
+}
+
+/** The quotation a successful request produced (asserted by `Then` steps). */
+export interface QuotationResult {
+  readonly bookingId: string
+  readonly status: string
+  readonly pricing: {
+    readonly totalAmount: number
+    readonly unrankedTouristTax: number
+    readonly rankedTouristTax: number
+    readonly depositAmount: number
+    readonly householdAmount: number
+  }
+}
+
+/**
+ * The per-scenario world: doubles, the auth test kit and the scenario state
+ * the step definitions accumulate. Actors live in the base class registry;
+ * bus dispatches and raw service calls (`attempt`) record their exits, so
+ * `Then` steps assert with `expectSuccess`/`expectFailure`.
+ */
+export class DomainWorld extends ScenarioWorld<WorldServices> {
+  readonly doubles: TestDoubles
+  readonly testAuth: TestAuthService
+
+  /** Password per registered email (auth-service steps re-sign-in with it). */
+  readonly registeredPasswords = new Map<string, string>()
+  /** Session token per email (login / password-change steps). */
+  readonly sessions = new Map<string, string>()
+
+  // Booking fixtures installed by the background steps.
+  villaName = ""
+  cautionAmount = 0
+  householdAmount = 0
+  seasonalRanges: Array<{ from: string; to: string; weeklyAmount: number }> = []
+  discountRanges: Array<{ fromNights: number; toNights: number; percent: number }> = []
+
+  // Pending requests staged by `Given` steps.
+  registerRequest?: { email: string; password: string; phone: string; firstname: string; lastname: string }
+  loginRequest?: { email: string; password: string }
+  recoverRequestEmail?: string
+  updatePasswordRequest?: UpdatePasswordRequest
+  lastResetToken?: string
+  quotationRequest?: QuotationRequestData
+  profileRequest?: { language?: string; firstname?: string; lastname?: string; line1?: string; line3?: string }
+
+  // Observed results.
+  quotationResult?: QuotationResult
+  quotationOwnerId?: string
+  emailCountMark = 0
+  /** The email login/profile steps act as (kept even without an actor). */
+  currentEmail?: string
+
+  constructor(scope: Scope.Scope, context: Context.Context<WorldServices>, doubles: TestDoubles, testAuth: TestAuthService) {
+    super(scope, context)
+    this.doubles = doubles
+    this.testAuth = testAuth
+  }
+
+  /** Processes every projection to the head (the manual drain of this suite). */
+  readonly runWorkers = (): Effect.Effect<void, never, never> =>
+    this.use(runWorkersOnce as Effect.Effect<void, never, WorldServices>)
+}
+
+/** Builds a fresh scenario world inside the suite-owned scope. */
+export const buildWorld = (scope: Scope.Scope): Effect.Effect<DomainWorld, never, never> =>
   Effect.gen(function* () {
-    const mails: Array<OutgoingMail> = []
-    const authEmails: Array<RecordedAuthEmail> = []
-    const files = new Map<string, Uint8Array>()
-    const catalog = MutableVillaCatalog()
-
-    const authStore = inMemoryAuthStore()
-    const tenantConfig = tenantConfigOf(testConfig.baseUrl)
-    const auth = makeAuth({
-      store: authStore.store,
-      resolveTenant: () => Effect.succeed(tenantConfig),
-      emailSender: {
-        send: (email) =>
-          Effect.sync(() =>
-            void authEmails.push({
-              to: email.to,
-              kind: email.kind,
-              token: Redacted.value(email.token),
-              url: email.url,
-            }),
-          ),
-      },
-      rateLimiter: allowAllRateLimiter,
-    })
-    const authHandler = makeAuthHandler(auth, { resolveTenant: () => Effect.succeed(TENANT_ID) })
-
-    const ConfigLive = Layer.succeed(DomainConfigTag, testConfig)
-    const AuthLive = Layer.succeed(AppAuthTag, { auth, handler: authHandler.handler, tenantConfig })
-    const BusesLive = busesLayer.pipe(Layer.provide(handlers), Layer.provide(IdempotencyStore.inMemory))
-    const SqlLive = SqliteClient.layer({ filename: ":memory:" })
-    const ViewsMigrationsLive = Migrations.layer(viewMigrations)
-
-    const worldLayer = Layer.mergeAll(
-      BusesLive,
-      MailerLive(mails),
-      FileStoreLive(files),
-      PdfLive,
-      catalog.layer,
-      ConfigLive,
-    ).pipe(
-      Layer.provideMerge(ViewsMigrationsLive),
-      Layer.provideMerge(SqlLive),
-      Layer.provideMerge(InMemoryAll),
-      Layer.provideMerge(AuthLive),
-      Layer.provide(layerSilent),
-    )
-
-    const scope = yield* Scope.make()
-    const context = yield* Layer.buildWithScope(worldLayer, scope)
-    const provide = <A, E>(effect: Effect.Effect<A, E, WorldServices>) =>
-      Effect.provide(effect as Effect.Effect<A, E, never>, context) as Effect.Effect<A, E, never>
-
-    const doubles: TestDoubles = { mails, authEmails, files, catalog, config: testConfig, auth }
-
-    return {
-      doubles,
-      run: (effect) => Effect.runPromise(provide(effect)),
-      fail: (effect) => Effect.runPromise(Effect.flip(provide(effect))),
-      attempt: <A, E>(effect: Effect.Effect<A, E, WorldServices>) =>
-        Effect.runPromise(
-          Effect.map(Effect.exit(provide(effect)), (exit): { ok: true; value: A } | { ok: false; error: E } => {
-            if (exit._tag === "Success") return { ok: true, value: exit.value }
-            const cause: unknown = exit.cause
-            const failure =
-              typeof cause === "object" && cause !== null && "_tag" in cause && (cause as { _tag: string })._tag === "Fail"
-                ? ((cause as unknown as { error: E }).error)
-                : (cause as E)
-            return { ok: false, error: failure }
-          }),
-        ),
-      runWorkers: () => Effect.runPromise(provide(runWorkersOnce as Effect.Effect<void, never, WorldServices>)),
+    const doubles: TestDoubles = {
+      mails: [],
+      files: new Map<string, Uint8Array>(),
+      catalog: MutableVillaCatalog(),
+      config: testConfig,
     }
-  }) as Effect.Effect<BuiltWorld, never, never>
-
-export type WorldServices = CommandBus | QueryBus | SqlClient | DomainConfigTag | Mailer | FileStore | VillaCatalog | AppAuthTag
+    const testAuth = TestAuth.make({
+      tenantId: TENANT_ID,
+      baseUrl: testConfig.baseUrl,
+      tenant: tenantConfigOf(testConfig.baseUrl),
+    })
+    // Build failures (config, migrations, sql) are test-infra defects: die.
+    const context = yield* Layer.buildWithScope(worldLayerOf(doubles, testAuth), scope).pipe(Effect.orDie)
+    return new DomainWorld(scope, context, doubles, testAuth)
+  })

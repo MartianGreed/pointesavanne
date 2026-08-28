@@ -8,27 +8,26 @@
   },
   "scripts": {
     "test": "bun test test/*.test.ts",
-    "test:features": "bun node_modules/@cucumber/cucumber/bin/cucumber.js",
+    "test:features": "bun test test/features/features.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@effect/sql": "^0.52.1",
-    "@structure-ai/auth": "0.0.3",
-    "@structure-ai/authorization": "0.0.3",
-    "@structure-ai/config": "0.0.3",
-    "@structure-ai/cqrs": "0.0.3",
-    "@structure-ai/domain": "0.0.3",
-    "@structure-ai/eventsourcing": "0.0.3",
-    "@structure-ai/migrations": "0.0.3",
-    "@structure-ai/viewmodel": "0.0.3",
+    "@structure-ai/auth": "0.0.6",
+    "@structure-ai/authorization": "0.0.6",
+    "@structure-ai/config": "0.0.6",
+    "@structure-ai/cqrs": "0.0.6",
+    "@structure-ai/domain": "0.0.6",
+    "@structure-ai/eventsourcing": "0.0.6",
+    "@structure-ai/migrations": "0.0.6",
+    "@structure-ai/viewmodel": "0.0.6",
     "effect": "^3.22.1"
   },
   "devDependencies": {
-    "@cucumber/cucumber": "11",
     "@effect/sql-sqlite-bun": "^0.34.0",
-    "@structure-ai/observability": "0.0.3",
+    "@structure-ai/observability": "0.0.6",
     "bun-types": "latest",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "@structure-ai/bdd": "0.0.6"
   }
 }

@@ -14,10 +14,10 @@ PostgreSQL for durability and an **Angular 22** client (SSR + SPA, French).
 ```
 packages/
 └── domain/    @pointesavanne/domain — the business domain, reusable across
-│               apps: booking & profile aggregates, pricing engine, villa
-│               catalog, message contracts, access policy, handlers, views &
-│               projections, ports (mailer, files, quotation PDF, auth),
-│               in-memory test composition, BDD feature suite
+                apps: booking & profile aggregates, pricing engine, villa
+                catalog, message contracts, access policy, handlers, views &
+                projections, ports (mailer, files, quotation PDF, auth),
+                in-memory test composition, feature suite on @structure-ai/bdd
 apps/
 ├── api/       thin host over the domain: HTTP surface (OpenAPI at /docs),
 │              production adapters (PostgreSQL event store & auth, local
@@ -50,7 +50,7 @@ bun run check
 | Command | What it covers |
 | --- | --- |
 | `bun run test` | pricing engine & booking aggregate (`packages/domain`), HTTP surface (`apps/api`: real sockets, real policy stack, in-memory adapters) |
-| `bun run test:features` | the BDD suite in `packages/domain` (Cucumber, 23 scenarios) driving commands/queries and the auth service end to end |
+| `bun run test:features` | the BDD suite in `packages/domain` (`@structure-ai/bdd` on `bun test`, 23 scenarios) driving commands/queries and the auth service end to end |
 | `bun test test/pg.test.ts` (in `apps/api`, needs `DATABASE_URL`) | migrations + event store + projections + auth store over real PostgreSQL |
 
 ## Architecture
@@ -95,14 +95,18 @@ contract, shared by every future host app.
 | LOG_FORMAT | "json" \| "pretty" | no | json |  | log output format |
 | OTLP_URL | url | no |  |  | OTLP collector base URL; telemetry export is off when unset |
 
-API docs: `/docs` (Swagger UI) and `/openapi.json`. The `/auth/*` routes are
+API docs: `/docs` (Swagger UI) and `/openapi.json`. Business failures a
+message declares in its `failure` schema surface as typed **422** responses
+(the `@structure-ai` 0.0.4 bridge contract) — e.g. another customer reading
+a booking gets `422 PermissionDenied`; bus-level denials stay 403 problems.
+The `/auth/*` routes are
 the auth framework's Web handler mounted at the edge and are intentionally not
 part of the generated OpenAPI spec; their contract is documented in
 `@structure-ai/auth`.
 
 ## Notes & known trade-offs
 
-- **`@structure-ai` 0.0.3 inter-dependencies** are published as a broken
+- **`@structure-ai` 0.0.6 inter-dependencies** are published as a broken
   `0.0.0` spec; the root `package.json` pins the whole scope via `overrides`
   until the framework publishes consistent versions.
 - **Rate limiter** is in-memory (`allowAllRateLimiter` in tests): honest for

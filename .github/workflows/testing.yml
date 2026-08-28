@@ -38,9 +38,9 @@ jobs:
         run: bun run typecheck
       - name: Unit + HTTP tests (in-memory and sqlite doubles)
         run: bun run test
-      - name: BDD feature tests
+      - name: Domain use cases (BDD feature suite, @structure-ai/bdd on bun test)
         run: bun run test:features
-      - name: PostgreSQL integration tests
+      - name: Domain stores over real PostgreSQL (migrations, event store, projections, auth)
         run: bun test test/pg.test.ts
         working-directory: apps/api
       - name: Build
