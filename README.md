@@ -1,113 +1,107 @@
 # Pointe Savanne
 
-Villa booking management system for Villa Pointe Savanne. Handles customer registration, quotation requests, pricing calculations with seasonal rates, and PDF quotation generation.
+Villa booking platform for Villa Pointe Savanne (Mauritius): customer accounts,
+quotation requests with seasonal pricing, tourist taxes and time-based discounts,
+PDF quotations, signature upload, and owner-side validation.
 
-## Getting Started
+TypeScript monorepo — **Bun + Turborepo**, built on the
+[`@structure-ai`](https://github.com/Ligerian-labs/structure) framework stack
+(DDD, CQRS, event sourcing, auth, authorization, HTTP, observability) with
+PostgreSQL for durability and an **Angular 22** client (SSR + SPA, French).
 
-### Prerequisites
+## Layout
 
-- [Bun](https://bun.sh) v1.3.4 or later
+```
+apps/
+├── api/       Bun + @structure-ai — aggregates, commands/queries, projections,
+│              auth, HTTP API (OpenAPI at /docs), migrations, BDD features
+└── client/    Angular 22 — marketing home (prerendered), customer area,
+               quotation flow, owner review screen
+```
 
-### Installation
+## Quick start
 
-```bash
+```sh
 bun install
+docker compose up -d        # local PostgreSQL
+cp .env.dist .env           # then adjust OWNER_EMAILS / ADMIN_MAIL
+
+bun run dev                 # api on :3000 (bun --watch) + client on :4200
 ```
 
-### Running the Application
+The client dev server proxies `/auth`, `/bookings`, `/customers` and `/health`
+to the API, so cookies work without CORS.
 
-```bash
-bun run dev
+Full check (typecheck, tests, features, build):
+
+```sh
+bun run check
 ```
-
-The server starts on port 3000 with hot module reloading enabled.
-
-### Environment Setup
-
-Copy `.env.dist` to `.env` and configure the required variables:
-
-```bash
-cp .env.dist .env
-```
-
-## Architecture
-
-The project follows Domain-Driven Design (DDD) with a clear separation of concerns:
-
-```
-ts/
-├── domain/           # Business logic and domain models
-│   ├── booking/      # Quotation, pricing, tax, discounts
-│   ├── customer/     # Registration, login, profile management
-│   └── shared/       # Shared value objects and utilities
-├── application/      # HTTP server and route handlers
-└── infrastructure/   # External service implementations
-```
-
-### Domain Contexts
-
-**Booking Context**
-- Quotation requests and generation
-- Pricing with seasonal rates and EUR formatting
-- Tourist tax calculations (ranked/unranked)
-- Time-based discounts (10% for 8-14 days, 15% for 15+ days)
-
-**Customer Context**
-- Email-based registration with encrypted passwords
-- Authentication and profile management
-- Token-based password recovery
-
-### Key Patterns
-
-- **Value Objects**: `Price`, `Email`, `CustomerId`
-- **Use Cases**: Command/response pattern for business operations
-- **In-memory Test Doubles**: For repository and gateway implementations
 
 ## Testing
 
-### Unit Tests
+| Command | What it covers |
+| --- | --- |
+| `bun run test` | pricing engine, booking aggregate, HTTP surface (real sockets, real policy stack, in-memory adapters) |
+| `bun run test:features` | the BDD suite (Cucumber, 23 scenarios) driving commands/queries and the auth service end to end |
+| `bun test test/pg.test.ts` (in `apps/api`, needs `DATABASE_URL`) | migrations + event store + projections + auth store over real PostgreSQL |
 
-```bash
-bun test
-```
+## Architecture
 
-With coverage:
+Event-sourced **Booking** and **CustomerProfile** aggregates
+(`decide`/`evolve` deciders); schema-typed **commands and queries** on a bus
+with boundary validation, authorization, idempotency and tracing;
+**projections** hydrate read models (`booking_view`, `customer_profile_view`)
+and drive notifications and the automatic quotation generator (inbox-deduped,
+live-gated so rebuilds never resend emails).
 
-```bash
-bun test --coverage
-```
+- **Credentials** live in `@structure-ai/auth` (password lifecycle, opaque
+  cookie sessions, mandatory e-mail verification); the profile aggregate owns
+  the booking-relevant customer data. Registration on the client = auth
+  register, then profile save after sign-in.
+- **Authorization**: a typed policy (customer/owner/system roles). The bus
+  denies unmapped messages; row-level ownership is checked in the query
+  handler. Anonymous dispatches are denied at the bus (403 `Unauthorized`).
+- **Pricing**: the legacy algorithm is ported 1:1 (cent rounding included) and
+  pinned by the BDD scenarios — see `apps/api/src/booking/pricing.ts`.
+- **Availability** is answered from the (eventually consistent) booking view;
+  the read-side race is accepted and documented — the owner resolves any
+  double-booking during validation.
+- **Migrations**: the API process is the single designated migrator
+  (event-store tables, view tables, auth tables), forward-only.
 
-### BDD Feature Tests
+### API settings
 
-9 Cucumber feature files cover complete user journeys:
+| Name | Type | Required | Default | Secret | Description |
+| --- | --- | --- | --- | --- | --- |
+| HTTP_PORT | port | no | 3000 |  |  |
+| DATABASE_URL | secret | yes |  | yes | PostgreSQL connection URL (event store, views, auth store) |
+| BASE_URL | url | no | http://localhost:3000/ |  | public base URL of the API (auth links, tenant origins) |
+| ADMIN_MAIL | string | yes |  |  | mailbox receiving internal notifications |
+| OWNER_EMAILS | string | no |  |  | comma-separated emails granted the owner role at sign-in |
+| FILES_DIR | string | no | ./var/files |  | base directory for generated quotations and uploaded documents |
+| LOG_LEVEL | log-level | yes |  |  | minimum log level |
+| LOG_FORMAT | "json" \| "pretty" | no | json |  | log output format |
+| OTLP_URL | url | no |  |  | OTLP collector base URL; telemetry export is off when unset |
 
-```bash
-bun run test:features
-```
+API docs: `/docs` (Swagger UI) and `/openapi.json`. The `/auth/*` routes are
+the auth framework's Web handler mounted at the edge and are intentionally not
+part of the generated OpenAPI spec; their contract is documented in
+`@structure-ai/auth`.
 
-Feature files are located in `/features`:
-- `booking/`: Quotation requests, generation, pricing
-- `customer/`: Registration, login, profile, password recovery
+## Notes & known trade-offs
 
-### Type Checking
-
-```bash
-bun run typecheck
-```
-
-## Contributing
-
-### Development Workflow
-
-1. Create a feature branch from `main`
-2. Implement changes following existing patterns
-3. Add tests for new functionality
-4. Run all tests and type checks before committing
-5. Create a pull request
-
-### Code Guidelines
-
-- Follow DDD principles and existing directory structure
-- Use value objects for domain primitives
-- Write BDD scenarios for user-facing features
-- Use in-memory test doubles for infrastructure dependencies
+- **`@structure-ai` 0.0.3 inter-dependencies** are published as a broken
+  `0.0.0` spec; the root `package.json` pins the whole scope via `overrides`
+  until the framework publishes consistent versions.
+- **Rate limiter** is in-memory (`allowAllRateLimiter` in tests): honest for
+  the current single-instance deployment; move to a shared store before
+  scaling horizontally.
+- **Quotation PDFs** are currently rendered as HTML (the legacy dompdf
+  pipeline's input) behind a port; byte-true PDF rendering is a drop-in later.
+- **`@effect/sql` Migrator bug**: its pg `ensureTable` aborts the migration
+  transaction by probing with a deliberate error; the app pre-creates the
+  bookkeeping table (idempotent) — see `apps/api/src/migrations.ts`.
+- Mutations on `/auth/*` are origin-checked against the request origin; the
+  client is deployed same-origin (or via proxy). Cross-origin deployments must
+  configure `allowOrigin`.

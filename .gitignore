@@ -1,13 +1,26 @@
-.DS_Store
-.idea/
-.env
-var
-tmp
-coverage/
-.phpunit.result.cache
+# dependencies
+node_modules/
 
-vendor
-node_modules
-coverage
-reports
-.claude-modified-files
+# builds
+dist/
+.angular/
+coverage/
+reports/
+
+# env
+.env
+.env.local
+
+# logs / os
+*.log
+.DS_Store
+
+# turbo
+turbo/ 
+.turbo/
+
+# runtime files
+var/
+
+# bun
+.bun/
