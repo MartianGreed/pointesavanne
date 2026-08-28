@@ -9,13 +9,17 @@ import {
   HttpCqrs,
   withDefaultErrors,
 } from "@structure-ai/http"
-import { CommandBus, QueryBus } from "@structure-ai/cqrs"
+import { HttpAuthorization } from "@structure-ai/authorization"
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder"
+import * as HttpApp from "@effect/platform/HttpApp"
+import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
+import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
 import { Effect, Layer, Schema } from "effect"
-import { FileStore } from "./infra.ts"
 import {
+  AppAuthTag,
   BookingRow,
   CheckAvailability,
+  FileStore,
   GetBooking,
   GetProfile,
   ListAllBookings,
@@ -24,7 +28,8 @@ import {
   SaveProfile,
   SignQuotation,
   ValidateQuotation,
-} from "./messages/index.ts"
+  resolvePrincipal,
+} from "@pointesavanne/domain"
 
 // ---------------------------------------------------------------------------
 // API declaration — the OpenAPI contract is generated from this.
@@ -111,4 +116,34 @@ export const ApiLive = HttpApiBuilder.api(appApi).pipe(
   Layer.provide([BookingsLive, CustomersLive, Health.layer(appApi)]),
 )
 
-export { CommandBus, QueryBus, Docs }
+// ---------------------------------------------------------------------------
+// Edge middleware: the @structure-ai/auth Web handler (/auth/*) mounted in
+// front of the HttpApi router, and session-cookie → Principal resolution for
+// the guards below the HTTP edge.
+// ---------------------------------------------------------------------------
+
+/** Mounts the auth Web handler: requests under /auth/ never reach the api groups. */
+export const AuthRoutesLive = HttpApiBuilder.middleware(
+  Effect.map(AppAuthTag, ({ handler }) => (app: HttpApp.Default) =>
+    Effect.gen(function* () {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      // The request service is the (augmented) Web Request; its `url` is the
+      // request path. /auth/* never reaches the api groups.
+      if (!request.url.startsWith("/auth/")) return yield* app
+      // The platform's request service is a wrapper; `source` is the native
+      // Web Request with its body still unread.
+      const source = (request as unknown as { readonly source: Request }).source
+      const web = yield* Effect.tryPromise(() => handler(source)).pipe(Effect.orDie)
+      return HttpServerResponse.fromWeb(web)
+    }),
+  ),
+)
+
+/** Session cookie → Principal on the fiber, for guards below the HTTP edge. */
+export const PrincipalLive = HttpAuthorization.layer((request) => resolvePrincipal(request.headers.cookie ?? null))
+
+/** The api with its edge middleware (auth routes + principal resolution). */
+export const ApiWithMiddleware = ApiLive.pipe(
+  Layer.provide(AuthRoutesLive),
+  Layer.provide(PrincipalLive),
+)

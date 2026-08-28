@@ -9,17 +9,24 @@ import { Docs, Health, serveTest } from "@structure-ai/http"
 import { HttpApiBuilder, HttpServer } from "@structure-ai/http"
 import { Readiness } from "@structure-ai/runtime"
 import { layer as observabilityLayer } from "@structure-ai/observability"
-import { AuthorizerLive, ApiWithMiddleware } from "../src/app.ts"
-import { ApiLive } from "../src/http.ts"
-import { AppAuthTag } from "../src/auth.ts"
-import { handlers } from "../src/handlers.ts"
-import { FileNotFound, FileStore, Mailer, QuotationPdf } from "../src/infra.ts"
-import { viewMigrations } from "../src/migrations.ts"
-import { TENANT_ID } from "../src/policy.ts"
-import { tenantConfigOf } from "../src/auth.ts"
-import { AppConfigTag, runWorkersOnce } from "../src/views.ts"
-import { defaultVilla, MutableVillaCatalog } from "../src/catalog.ts"
-import type { AppConfig } from "../src/settings.ts"
+import {
+  AppAuthTag,
+  AuthorizerLive,
+  DomainConfigTag,
+  FileNotFound,
+  FileStore,
+  Mailer,
+  QuotationPdf,
+  TENANT_ID,
+  defaultVilla,
+  handlers,
+  MutableVillaCatalog,
+  runWorkersOnce,
+  tenantConfigOf,
+  viewMigrations,
+} from "@pointesavanne/domain"
+import { ApiWithMiddleware } from "../src/http.ts"
+import type { ApiConfig } from "../src/settings.ts"
 
 /**
  * HTTP-level test: real sockets, the real policy stack, the real auth
@@ -27,7 +34,7 @@ import type { AppConfig } from "../src/settings.ts"
  * only the durable adapters are in-memory doubles.
  */
 
-const config: AppConfig = {
+const config: ApiConfig = {
   http: { port: 0 },
   databaseUrl: Redacted.make("postgres://test"),
   baseUrl: new URL("http://127.0.0.1:3000"),
@@ -93,7 +100,7 @@ const TestLayers = serveTest.pipe(
     ),
   ),
   Layer.provideMerge(catalog.layer),
-  Layer.provideMerge(Layer.succeed(AppConfigTag, config)),
+  Layer.provideMerge(Layer.succeed(DomainConfigTag, config)),
   Layer.provideMerge(AppAuthLive),
   Layer.provideMerge(Migrations.layer(viewMigrations)),
   Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" })),

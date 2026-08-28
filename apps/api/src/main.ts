@@ -2,9 +2,8 @@ import { SqlClient } from "@effect/sql/SqlClient"
 import { launch, Readiness, Shutdown } from "@structure-ai/runtime"
 import { Projection } from "@structure-ai/eventsourcing"
 import { Duration, Effect, Fiber, Layer } from "effect"
+import { allProjections, type AppEvent } from "@pointesavanne/domain"
 import { productionLayers } from "./app.ts"
-import { allProjections } from "./views.ts"
-import type { AppEvent } from "./events.ts"
 
 /**
  * The API process: config → telemetry → resources (postgres, migrations,

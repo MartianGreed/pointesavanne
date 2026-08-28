@@ -1,19 +1,24 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { AggregateStore } from "@structure-ai/eventsourcing"
+import { AggregateStore, Projection } from "@structure-ai/eventsourcing"
 import { layer as esPg } from "@structure-ai/eventsourcing-pg"
 import { makeAuthStore, migrate as migrateAuthPg } from "@structure-ai/auth-pg"
 import * as Migrations from "@structure-ai/migrations"
 import { PgClient } from "@effect/sql-pg"
 import { SQL } from "bun"
 import { Effect, Exit, Layer, Redacted, Scope } from "effect"
-import { Booking, BookingId } from "../src/booking/booking.ts"
-import { defaultVilla } from "../src/catalog.ts"
-import { bookingRegistry } from "../src/events.ts"
-import { bookkeepingTable, prodMigrations } from "../src/migrations.ts"
-import { AppConfigTag, BookingView, bookingViews, isVillaAvailable } from "../src/views.ts"
-import { Projection } from "@structure-ai/eventsourcing"
+import {
+  Booking,
+  BookingId,
+  BookingView,
+  bookingViews,
+  bookingRegistry,
+  defaultVilla,
+  DomainConfigTag,
+  isVillaAvailable,
+  Mailer,
+} from "@pointesavanne/domain"
 import { ViewStore } from "@structure-ai/viewmodel"
-import { Mailer } from "../src/infra.ts"
+import { bookkeepingTable, prodMigrations } from "../src/migrations.ts"
 
 /**
  * Durable-adapter integration against PostgreSQL. Skipped unless
@@ -35,15 +40,11 @@ maybe("postgres adapters", () => {
   const MigrationsLive = Migrations.layer(prodMigrations).pipe(Layer.provide(bookkeepingTable()))
   const StoresLive = esPg({ tablePrefix: "es_" })
 
-  const ConfigLive = Layer.succeed(AppConfigTag, {
-    http: { port: 0 },
-    databaseUrl: Redacted.make(databaseUrl!),
+  const ConfigLive = Layer.succeed(DomainConfigTag, {
     baseUrl: new URL("http://localhost:3000"),
     adminMail: "admin@pointesavanne.test",
     ownerEmails: "",
-    filesDir: "./var/test-files",
-    obs: { logLevel: "info", logFormat: "json", otlpUrl: { _tag: "None" } },
-  } as never)
+  })
 
   const TestLive = StoresLive.pipe(
     Layer.provide(MigrationsLive),

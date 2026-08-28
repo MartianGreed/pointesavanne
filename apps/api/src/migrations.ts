@@ -1,10 +1,10 @@
-import { makeSet, defineMigration, run } from "@structure-ai/migrations"
+import { makeSet, defineMigration } from "@structure-ai/migrations"
 import * as SqlClient from "@effect/sql/SqlClient"
 import type { SqlError } from "@effect/sql/SqlError"
 import { Effect, Layer } from "effect"
 import { migrate as migrateEventStorePg } from "@structure-ai/eventsourcing-pg"
 import { ViewModel } from "@structure-ai/viewmodel"
-import { BookingView, CustomerProfileView } from "./views.ts"
+import { BookingView, CustomerProfileView } from "@pointesavanne/domain"
 
 /**
  * Forward-only migrations. The API process is the single designated migrator
@@ -17,9 +17,6 @@ export const prodMigrations = makeSet([
   ViewModel.migration(BookingView, 2),
   ViewModel.migration(CustomerProfileView, 3),
 ])
-
-/** View tables only — used by the test composition on sqlite :memory:. */
-export const viewMigrations = makeSet([ViewModel.migration(BookingView, 1), ViewModel.migration(CustomerProfileView, 2)])
 
 /**
  * Pre-creates the migrations bookkeeping table. The @effect/sql Migrator's
@@ -37,5 +34,3 @@ export const bookkeepingTable = (table = "effect_sql_migrations"): Layer.Layer<n
       )
     `),
   )
-
-export { run }

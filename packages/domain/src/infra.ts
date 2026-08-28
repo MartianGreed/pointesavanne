@@ -77,3 +77,32 @@ export class QuotationPdf extends Context.Tag("pointesavanne/QuotationPdf")<Quot
 }>() {}
 
 export const quotationPath = (bookingId: string): string => `booking/${bookingId}/devis.pdf`
+
+/**
+ * Default adapter: renders the quotation document as HTML (the legacy
+ * dompdf pipeline's input); byte-true PDF rendering swaps in behind the
+ * port later.
+ */
+export const HtmlQuotationPdf = Layer.succeed(
+  QuotationPdf,
+  QuotationPdf.of({
+    render: (booking) =>
+      Effect.succeed(
+        new TextEncoder().encode(
+          [
+            '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Devis</title></head><body>',
+            `<h1>Devis — ${booking.villaName}</h1>`,
+            `<p>Client : ${booking.customer.name} (${booking.customer.email})</p>`,
+            `<p>Séjour du ${booking.from} au ${booking.to} — ${booking.adultsCount} adulte(s), ${booking.childrenCount} enfant(s)</p>`,
+            "<ul>",
+            `<li>Total séjour : ${booking.pricing.totalAmount} €</li>`,
+            `<li>Taxe touristique (non classé) : ${booking.pricing.unrankedTouristTax} €</li>`,
+            `<li>Taxe touristique (classé 4 étoiles) : ${booking.pricing.rankedTouristTax} €</li>`,
+            `<li>Caution : ${booking.pricing.depositAmount} €</li>`,
+            `<li>Ménage obligatoire : ${booking.pricing.householdAmount} €</li>`,
+            "</ul></body></html>",
+          ].join("\n"),
+        ),
+      ),
+  }),
+)
