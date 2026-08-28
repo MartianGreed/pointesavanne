@@ -24,7 +24,7 @@ import {
   type BookingRowType,
 } from "./messages/index.ts"
 import { policy } from "./policy.ts"
-import { AppConfigTag, BookingView, CustomerProfileView, isVillaAvailable, profileOf } from "./views.ts"
+import { BookingView, CustomerProfileView, isVillaAvailable, profileOf } from "./views.ts"
 
 /**
  * Use-case handlers. Commands are thin: authorization and shape validation

@@ -12,8 +12,8 @@ import { AppAuthTag, tenantConfigOf, type AppAuth } from "../src/auth.ts"
 import { FileNotFound, FileStore, Mailer, QuotationPdf, type OutgoingMail, type QuotationBookingData } from "../src/infra.ts"
 import { viewMigrations } from "../src/migrations.ts"
 import { TENANT_ID } from "../src/policy.ts"
-import type { AppConfig } from "../src/settings.ts"
-import { AppConfigTag, runWorkersOnce } from "../src/views.ts"
+import { DomainConfigTag, type DomainConfig } from "../src/settings.ts"
+import { runWorkersOnce } from "../src/views.ts"
 
 /**
  * The test composition: the production wiring with every durable adapter
@@ -36,20 +36,14 @@ export interface TestDoubles {
   readonly authEmails: Array<RecordedAuthEmail>
   readonly files: Map<string, Uint8Array>
   readonly catalog: ReturnType<typeof MutableVillaCatalog>
-  readonly config: AppConfig
+  readonly config: DomainConfig
   readonly auth: AppAuth["auth"]
 }
 
-const testConfig: AppConfig = {
-  http: { port: 0 },
-  // deno-lint-ignore no-explicit-any
-  databaseUrl: Redacted.make("postgres://test") as any,
+const testConfig: DomainConfig = {
   baseUrl: new URL("http://localhost:3000"),
   adminMail: "admin@pointesavanne.test",
   ownerEmails: "",
-  filesDir: "./var/test-files",
-  // deno-lint-ignore no-explicit-any
-  obs: { logLevel: "info", logFormat: "json", otlpUrl: { _tag: "None" } } as any,
 }
 
 const MailerLive = (mails: Array<OutgoingMail>) =>
@@ -112,7 +106,7 @@ export const buildTestWorld = (): Effect.Effect<BuiltWorld, never, never> =>
     })
     const authHandler = makeAuthHandler(auth, { resolveTenant: () => Effect.succeed(TENANT_ID) })
 
-    const ConfigLive = Layer.succeed(AppConfigTag, testConfig)
+    const ConfigLive = Layer.succeed(DomainConfigTag, testConfig)
     const AuthLive = Layer.succeed(AppAuthTag, { auth, handler: authHandler.handler, tenantConfig })
     const BusesLive = busesLayer.pipe(Layer.provide(handlers), Layer.provide(IdempotencyStore.inMemory))
     const SqlLive = SqliteClient.layer({ filename: ":memory:" })
@@ -160,4 +154,4 @@ export const buildTestWorld = (): Effect.Effect<BuiltWorld, never, never> =>
     }
   }) as Effect.Effect<BuiltWorld, never, never>
 
-export type WorldServices = CommandBus | QueryBus | SqlClient | AppConfigTag | Mailer | FileStore | VillaCatalog | AppAuthTag
+export type WorldServices = CommandBus | QueryBus | SqlClient | DomainConfigTag | Mailer | FileStore | VillaCatalog | AppAuthTag

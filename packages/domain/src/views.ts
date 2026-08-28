@@ -12,7 +12,7 @@ import { Mailer } from "./infra.ts"
 import { GenerateQuotation } from "./messages/index.ts"
 import { CommandBus } from "@structure-ai/cqrs"
 import { asSystem } from "./policy.ts"
-import type { AppConfig } from "./settings.ts"
+import { DomainConfigTag } from "./settings.ts"
 
 // ---------------------------------------------------------------------------
 // View models (the query side). One table per view, one writing projection
@@ -58,9 +58,6 @@ export const CustomerProfileView = ViewModel.define({
     line3: Schema.optional(Schema.String),
   },
 })
-
-/** Typed application config available to projections and handlers. */
-export class AppConfigTag extends Context.Tag("pointesavanne/AppConfig")<AppConfigTag, AppConfig>() {}
 
 /**
  * The write-side profile — used where a projection must not depend on another
@@ -202,7 +199,7 @@ const bookingOf = (bookingId: string) =>
     store.load(BookingId.make(bookingId)).pipe(Effect.orDie),
   )
 
-export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbox | AppConfigTag | EventStore> =
+export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbox | DomainConfigTag | EventStore> =
   Projection.make({
   name: "notifications",
   registry,
@@ -211,7 +208,7 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
       if (!ctx.live) return Effect.void
       return Inbox.dedupe("notifications", stored.metadata.eventId)(
         Effect.gen(function* () {
-          const config = yield* AppConfigTag
+          const config = yield* DomainConfigTag
           const profile = yield* profileOf(event.customerId).pipe(Effect.orDie)
           const mailer = yield* Mailer
 
@@ -265,7 +262,7 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
       if (!ctx.live) return Effect.void
       return Inbox.dedupe("notifications", stored.metadata.eventId)(
         Effect.gen(function* () {
-          const config = yield* AppConfigTag
+          const config = yield* DomainConfigTag
           const mailer = yield* Mailer
           yield* mailer.send({
             to: config.adminMail,

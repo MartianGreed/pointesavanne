@@ -1,4 +1,17 @@
-import { Condition, Policy } from "@structure-ai/authorization"
+import { Condition, CqrsAuthorization, Policy, Principal } from "@structure-ai/authorization"
+import type { Effect } from "effect"
+import {
+  CheckAvailability,
+  GenerateQuotation,
+  GetBooking,
+  GetProfile,
+  ListAllBookings,
+  ListMyBookings,
+  RequestQuotation,
+  SaveProfile,
+  SignQuotation,
+  ValidateQuotation,
+} from "./messages/index.ts"
 
 /**
  * Access rules: customers manage their own profile and bookings; the villa
@@ -35,9 +48,23 @@ export const policy = Policy.define({
 
 export const TENANT_ID = "pointesavanne" as const
 
-import { Principal } from "@structure-ai/authorization"
-import type { Effect } from "effect"
-
 /** Runs an effect as the internal system principal (background jobs). */
 export const asSystem = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
   Principal.within({ id: "quotation-generator", roles: ["system"], kind: "service" })(effect)
+
+/**
+ * The bus authorizer: maps every message to its permission and layers the
+ * policy rules over it. Fail closed — unmapped messages are denied.
+ */
+export const AuthorizerLive = CqrsAuthorization.rules(policy)
+  .message(RequestQuotation, "booking:request")
+  .message(SignQuotation, "booking:sign")
+  .message(ValidateQuotation, "booking:validate")
+  .message(GenerateQuotation, "booking:generate")
+  .message(GetBooking, "booking:list-own")
+  .message(ListMyBookings, "booking:list-own")
+  .message(ListAllBookings, "booking:read-all")
+  .message(SaveProfile, "profile:save")
+  .message(GetProfile, "profile:read")
+  .public(CheckAvailability)
+  .layer

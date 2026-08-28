@@ -1,37 +1,34 @@
 {
-  "name": "@pointesavanne/api",
-  "description": "Villa Pointe Savanne booking API — thin host over @pointesavanne/domain (@structure-ai stack, Bun + PostgreSQL)",
+  "name": "@pointesavanne/domain",
+  "description": "Villa Pointe Savanne business domain — aggregates, pricing, message contracts, policy, handlers, views and ports",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "dev": "bun --watch src/main.ts",
-    "start": "bun src/main.ts",
     "test": "bun test test/*.test.ts",
+    "test:features": "bun node_modules/@cucumber/cucumber/bin/cucumber.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform": "^0.97.1",
-    "@effect/platform-bun": "^0.91.2",
     "@effect/sql": "^0.52.1",
-    "@effect/sql-pg": "^0.53.0",
-    "@pointesavanne/domain": "workspace:*",
     "@structure-ai/auth": "0.0.3",
-    "@structure-ai/auth-pg": "0.0.3",
     "@structure-ai/authorization": "0.0.3",
     "@structure-ai/config": "0.0.3",
     "@structure-ai/cqrs": "0.0.3",
+    "@structure-ai/domain": "0.0.3",
     "@structure-ai/eventsourcing": "0.0.3",
-    "@structure-ai/eventsourcing-pg": "0.0.3",
-    "@structure-ai/http": "0.0.3",
     "@structure-ai/migrations": "0.0.3",
-    "@structure-ai/observability": "0.0.3",
-    "@structure-ai/runtime": "0.0.3",
     "@structure-ai/viewmodel": "0.0.3",
     "effect": "^3.22.1"
   },
   "devDependencies": {
+    "@cucumber/cucumber": "11",
     "@effect/sql-sqlite-bun": "^0.34.0",
+    "@structure-ai/observability": "0.0.3",
     "bun-types": "latest",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.0"
   }
 }

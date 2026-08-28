@@ -3,7 +3,8 @@
   "description": "Villa Pointe Savanne \u2014 booking platform (API + client)",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "dev": "turbo run dev",

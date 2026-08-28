@@ -12,9 +12,16 @@ PostgreSQL for durability and an **Angular 22** client (SSR + SPA, French).
 ## Layout
 
 ```
+packages/
+└── domain/    @pointesavanne/domain — the business domain, reusable across
+│               apps: booking & profile aggregates, pricing engine, villa
+│               catalog, message contracts, access policy, handlers, views &
+│               projections, ports (mailer, files, quotation PDF, auth),
+│               in-memory test composition, BDD feature suite
 apps/
-├── api/       Bun + @structure-ai — aggregates, commands/queries, projections,
-│              auth, HTTP API (OpenAPI at /docs), migrations, BDD features
+├── api/       thin host over the domain: HTTP surface (OpenAPI at /docs),
+│              production adapters (PostgreSQL event store & auth, local
+│              files, console mail), migrations, process entry
 └── client/    Angular 22 — marketing home (prerendered), customer area,
                quotation flow, owner review screen
 ```
@@ -42,8 +49,8 @@ bun run check
 
 | Command | What it covers |
 | --- | --- |
-| `bun run test` | pricing engine, booking aggregate, HTTP surface (real sockets, real policy stack, in-memory adapters) |
-| `bun run test:features` | the BDD suite (Cucumber, 23 scenarios) driving commands/queries and the auth service end to end |
+| `bun run test` | pricing engine & booking aggregate (`packages/domain`), HTTP surface (`apps/api`: real sockets, real policy stack, in-memory adapters) |
+| `bun run test:features` | the BDD suite in `packages/domain` (Cucumber, 23 scenarios) driving commands/queries and the auth service end to end |
 | `bun test test/pg.test.ts` (in `apps/api`, needs `DATABASE_URL`) | migrations + event store + projections + auth store over real PostgreSQL |
 
 ## Architecture
@@ -63,7 +70,7 @@ live-gated so rebuilds never resend emails).
   denies unmapped messages; row-level ownership is checked in the query
   handler. Anonymous dispatches are denied at the bus (403 `Unauthorized`).
 - **Pricing**: the legacy algorithm is ported 1:1 (cent rounding included) and
-  pinned by the BDD scenarios — see `apps/api/src/booking/pricing.ts`.
+  pinned by the BDD scenarios — see `packages/domain/src/booking/pricing.ts`.
 - **Availability** is answered from the (eventually consistent) booking view;
   the read-side race is accepted and documented — the owner resolves any
   double-booking during validation.
@@ -71,6 +78,10 @@ live-gated so rebuilds never resend emails).
   (event-store tables, view tables, auth tables), forward-only.
 
 ### API settings
+
+The business settings (`BASE_URL`, `ADMIN_MAIL`, `OWNER_EMAILS`) are declared
+in `packages/domain` and composed into the API's own settings — one env
+contract, shared by every future host app.
 
 | Name | Type | Required | Default | Secret | Description |
 | --- | --- | --- | --- | --- | --- |
