@@ -11,10 +11,12 @@ import {
 } from "@structure-ai/http"
 import { HttpAuthorization } from "@structure-ai/authorization"
 import * as HttpApiBuilder from "@effect/platform/HttpApiBuilder"
+import * as HttpApiSchema from "@effect/platform/HttpApiSchema"
 import * as HttpApp from "@effect/platform/HttpApp"
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
 import { Effect, Layer, Schema } from "effect"
+import * as AST from "effect/SchemaAST"
 import {
   AppAuthTag,
   BookingRow,
@@ -35,6 +37,23 @@ import {
 // API declaration — the OpenAPI contract is generated from this.
 // ---------------------------------------------------------------------------
 
+/**
+ * Declares a message's failure schema as a typed endpoint error, served
+ * with 422 (the bridge unwraps declared business failures so the platform
+ * encodes them through this schema instead of taxonomy-mapping to a
+ * problem). Mirrors the annotation @structure-ai/http applies to its
+ * generated endpoints; manual endpoints must declare it themselves.
+ */
+const businessFailure = <A, I>(failure: Schema.Schema<A, I>): Schema.Schema<A, I> => {
+  const status = HttpApiSchema.annotations({ status: 422 })
+  // Status resolution walks union members, so every leaf gets the annotation:
+  // flatten nested unions (e.g. AccessFailure) and annotate each member.
+  const leaves = (ast: AST.AST): ReadonlyArray<AST.AST> =>
+    AST.isUnion(ast) ? ast.types.flatMap(leaves) : [ast]
+  const members = leaves(failure.ast).map((member) => AST.annotations(member, status))
+  return Schema.make<A, I>(members.length === 1 ? members[0]! : AST.Union.make(members))
+}
+
 const bookings = ApiGroup.make("bookings")
   .add(HttpCqrs.commandEndpoint("requestQuotation", "/bookings/quotation", RequestQuotation))
   .add(HttpCqrs.queryEndpoint("listMyBookings", "/bookings/my", ListMyBookings))
@@ -43,12 +62,14 @@ const bookings = ApiGroup.make("bookings")
   .add(
     ApiEndpoint.get("getBooking")`/bookings/${ApiSchema.param("bookingId", Schema.String)}`
       .addSuccess(BookingRow)
+      .addError(businessFailure(GetBooking.failure!))
       .pipe(withDefaultErrors),
   )
   .add(
     ApiEndpoint.post("validateQuotation")`/bookings/${ApiSchema.param("bookingId", Schema.String)}/validation`
       .setPayload(Schema.Struct({ accepted: Schema.Boolean, reason: Schema.optional(Schema.String) }))
       .addSuccess(Schema.Struct({ bookingId: Schema.String, status: Schema.String }))
+      .addError(businessFailure(ValidateQuotation.failure!))
       .pipe(withDefaultErrors),
   )
   .add(
@@ -57,6 +78,7 @@ const bookings = ApiGroup.make("bookings")
     )`/bookings/${ApiSchema.param("bookingId", Schema.String)}/signed-document`
       .setPayload(Schema.Struct({ fileName: Schema.String, contentBase64: Schema.String }))
       .addSuccess(Schema.Struct({ bookingId: Schema.String, status: Schema.String }))
+      .addError(businessFailure(SignQuotation.failure!))
       .pipe(withDefaultErrors),
   )
 

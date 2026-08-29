@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
-import { allowAllRateLimiter, inMemoryAuthStore, makeAuth, makeAuthHandler } from "@structure-ai/auth"
 import { CommandBus, IdempotencyStore, QueryBus } from "@structure-ai/cqrs"
 import { InMemoryAll } from "@structure-ai/eventsourcing"
+import { TestAuth } from "@structure-ai/bdd"
 import * as Migrations from "@structure-ai/migrations"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { Context, Effect, Exit, Layer, Redacted, Scope } from "effect"
@@ -46,26 +46,19 @@ const config: ApiConfig = {
 }
 
 const mails: Array<{ to: string; subject: string }> = []
-const authEmails: Array<{ to: string; kind: string; token: string; url: string }> = []
 const files = new Map<string, Uint8Array>()
 const catalog = MutableVillaCatalog()
 catalog.set(defaultVilla)
 
-const auth = makeAuth({
-  store: inMemoryAuthStore().store,
-  resolveTenant: () => Effect.succeed(tenantConfigOf(config.baseUrl)),
-  emailSender: {
-    send: (email) =>
-      Effect.sync(() =>
-        void authEmails.push({ to: email.to, kind: email.kind, token: Redacted.value(email.token), url: email.url }),
-      ),
-  },
-  rateLimiter: allowAllRateLimiter,
+// The auth test kit: the real auth service + Web handler over in-memory
+// doubles, with every e-mail (tokens included) recorded for the steps below.
+const testAuth = TestAuth.make({ tenantId: TENANT_ID, baseUrl: config.baseUrl, tenant: tenantConfigOf(config.baseUrl) })
+const authEmails = testAuth.emails
+const AppAuthLive = Layer.succeed(AppAuthTag, {
+  auth: testAuth.auth,
+  handler: testAuth.authHandler.handler,
+  tenantConfig: tenantConfigOf(config.baseUrl),
 })
-const authHandler = makeAuthHandler(auth, { resolveTenant: () => Effect.succeed(TENANT_ID) })
-
-const tenantConfig = tenantConfigOf(config.baseUrl)
-const AppAuthLive = Layer.succeed(AppAuthTag, { auth, handler: authHandler.handler, tenantConfig })
 
 const TestLayers = serveTest.pipe(
   Layer.provide(Docs.layer()),
@@ -272,8 +265,10 @@ describe("booking api", () => {
     })
     const otherCookie = otherSignedIn.headers.get("set-cookie")!.split(";")[0]!
     const forbidden = await json("GET", `/bookings/${quotation.bookingId}`, undefined, otherCookie)
-    expect(forbidden.status).toBe(403)
-    expect(((await forbidden.json()) as { error: string }).error).toBe("PermissionDenied")
+    // Declared business failures (0.0.4 contract): the handler's row-level
+    // PermissionDenied surfaces as a typed 422, not a taxonomy problem.
+    expect(forbidden.status).toBe(422)
+    expect(((await forbidden.json()) as { _tag: string })._tag).toBe("PermissionDenied")
 
     const own = await json("GET", `/bookings/${quotation.bookingId}`, undefined, cookie)
     expect(own.status).toBe(200)
