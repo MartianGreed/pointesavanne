@@ -1,6 +1,17 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
+  "globalEnv": [
+    "HTTP_PORT",
+    "DATABASE_URL",
+    "BASE_URL",
+    "ADMIN_MAIL",
+    "OWNER_EMAILS",
+    "FILES_DIR",
+    "LOG_LEVEL",
+    "LOG_FORMAT",
+    "OTLP_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
