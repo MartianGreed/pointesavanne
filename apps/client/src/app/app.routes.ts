@@ -18,7 +18,7 @@ export const routes: Routes = [
   { path: "verification", component: VerifyEmailPage },
   { path: "mot-de-passe/oublie", component: ForgotPasswordPage },
   { path: "mot-de-passe/reinitialiser", component: ResetPasswordPage },
-  { path: "devis", component: QuotationPage, canActivate: [authGuard] },
+  { path: "devis", component: QuotationPage },
   { path: "espace-client", component: CustomerAreaPage, canActivate: [authGuard] },
   { path: "proprietaire/reservations", component: OwnerBookingsPage, canActivate: [ownerGuard] },
   { path: "**", redirectTo: "" },

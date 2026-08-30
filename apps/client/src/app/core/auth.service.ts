@@ -1,5 +1,6 @@
 import { Injectable, computed, inject, signal } from "@angular/core"
 import { Api } from "./api"
+import { clearContact } from "./form-storage"
 import {
   authenticatePasskey,
   createPasskey,
@@ -15,6 +16,13 @@ export interface SessionUser {
   readonly emailVerified: boolean
 }
 
+/** GET /me — the session's principal and its policy-derived permissions. */
+export interface Me {
+  readonly authenticated: boolean
+  readonly email?: string
+  readonly permissions: readonly string[]
+}
+
 /**
  * Authentication state over the API's cookie sessions (HttpOnly — the client
  * never touches the token). Registration is a two-step flow: auth register,
@@ -24,17 +32,21 @@ export interface SessionUser {
 export class Auth {
   readonly #api = inject(Api)
   readonly #user = signal<SessionUser | null | undefined>(undefined)
+  readonly #permissions = signal<readonly string[]>([])
 
   readonly user = computed(() => this.#user())
   readonly signedIn = computed(() => this.#user() != null)
+  /** Policy-derived permissions of the current principal (GET /me). */
+  readonly permissions = computed(() => this.#permissions())
+  readonly isOwner = computed(() => this.#permissions().includes("booking:read-all"))
 
   async refresh(): Promise<void> {
-    try {
-      const body = await this.#api.get<{ session: { user: SessionUser } | null }>("/auth/session")
-      this.#user.set(body.session?.user ?? null)
-    } catch {
-      this.#user.set(null)
-    }
+    const [sessionResult, meResult] = await Promise.allSettled([
+      this.#api.get<{ session: { user: SessionUser } | null }>("/auth/session"),
+      this.#api.get<Me>("/me"),
+    ])
+    this.#user.set(sessionResult.status === "fulfilled" ? (sessionResult.value.session?.user ?? null) : null)
+    this.#permissions.set(meResult.status === "fulfilled" ? meResult.value.permissions : [])
   }
 
   async register(input: { email: string; password: string; firstname: string; lastname: string; phoneNumber: string }): Promise<void> {
@@ -53,8 +65,13 @@ export class Auth {
   }
 
   async signOut(): Promise<void> {
-    await this.#api.post("/auth/sign-out", {})
-    this.#user.set(null)
+    try {
+      await this.#api.post("/auth/sign-out", {})
+    } finally {
+      this.#user.set(null)
+      this.#permissions.set([])
+      clearContact()
+    }
   }
 
   async requestPasswordReset(email: string): Promise<void> {

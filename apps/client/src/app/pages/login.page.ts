@@ -4,6 +4,7 @@ import { Auth } from "../core/auth.service"
 import { ApiError } from "../core/api"
 import { passkeysSupported } from "../core/passkey"
 import { passkeyErrorMessage } from "../core/passkey-errors"
+import { takeDevisIntent } from "../core/form-storage"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -133,10 +134,6 @@ type Mode = "connexion" | "inscription"
         <p class="terms">
           En continuant, vous acceptez nos
           <a routerLink="/">conditions d'utilisation</a> et notre politique de confidentialité.
-        </p>
-        <p class="owner-hint">
-          Vous êtes le propriétaire ?
-          <a routerLink="/proprietaire/reservations">Accéder à l'espace de gestion</a>
         </p>
       </div>
     </section>
@@ -314,15 +311,6 @@ type Mode = "connexion" | "inscription"
       color: var(--muted);
       text-decoration: underline;
     }
-    .owner-hint {
-      font-size: 12.5px;
-      color: var(--muted-2);
-      margin: 12px 0 0;
-      text-align: center;
-    }
-    .owner-hint a {
-      font-size: 12.5px;
-    }
     @media (max-width: 900px) {
       .auth-grid {
         grid-template-columns: 1fr;
@@ -420,7 +408,7 @@ export class LoginPage {
     try {
       const email = this.email().trim()
       await this.#auth.signInWithPasskey(email === "" ? undefined : email)
-      await this.#router.navigate(["/espace-client"])
+      await this.apresConnexion()
     } catch (e) {
       this.erreur.set(passkeyErrorMessage(e, "Connexion par clé d'accès impossible."))
     } finally {
@@ -428,12 +416,25 @@ export class LoginPage {
     }
   }
 
+  /**
+   * Post-sign-in destination, by priority: a quotation the visitor was
+   * sending (F1), then the owner console for owners (E5), else the customer
+   * area.
+   */
+  private async apresConnexion(): Promise<void> {
+    if (takeDevisIntent()) {
+      await this.#router.navigate(["/devis"])
+      return
+    }
+    await this.#router.navigate([this.#auth.isOwner() ? "/proprietaire/reservations" : "/espace-client"])
+  }
+
   private async seConnecter(): Promise<void> {
     this.busy.set(true)
     this.erreur.set("")
     try {
       await this.#auth.signIn(this.email(), this.mdp())
-      await this.#router.navigate(["/espace-client"])
+      await this.apresConnexion()
     } catch (e) {
       if (e instanceof ApiError && e.problem.error === "EmailNotVerified") {
         this.erreur.set("Votre adresse e-mail n'est pas encore vérifiée. Suivez le lien reçu par e-mail, puis reconnectez-vous.")

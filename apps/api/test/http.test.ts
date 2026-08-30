@@ -175,6 +175,51 @@ describe("auth surface", () => {
   })
 })
 
+describe("session permissions (/me)", () => {
+  const signInAs = async (email: string, password: string): Promise<string> => {
+    await json("POST", "/auth/register/password", { email, password })
+    const verification = authEmails.find((mail) => mail.kind === "email-verification" && mail.to === email)
+    expect(verification).toBeDefined()
+    await json("POST", "/auth/verify-email", { token: verification!.token })
+    const signedIn = await json("POST", "/auth/sign-in/password", { email, password })
+    expect(signedIn.status).toBe(200)
+    return signedIn.headers.get("set-cookie")!.split(";")[0]!
+  }
+
+  test("anonymous: authenticated false, no permissions", async () => {
+    const response = await json("GET", "/me")
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { authenticated: boolean; email?: string; permissions: string[] }
+    expect(body.authenticated).toBe(false)
+    expect(body.email).toBeUndefined()
+    expect(body.permissions).toEqual([])
+  })
+
+  test("customer: authenticated with customer permissions, no owner permission", async () => {
+    const cookie = await signInAs("me-customer@example.com", "long-customer-password")
+    const response = await json("GET", "/me", undefined, cookie)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { authenticated: boolean; email?: string; permissions: string[] }
+    expect(body.authenticated).toBe(true)
+    expect(body.email).toBe("me-customer@example.com")
+    expect(body.permissions).toContain("booking:request")
+    expect(body.permissions).toContain("profile:save")
+    expect(body.permissions).not.toContain("booking:read-all")
+  })
+
+  test("owner: the policy grants booking:read-all", async () => {
+    // owner@pointesavanne.test is the configured OWNER_EMAILS address.
+    const cookie = await signInAs("owner@pointesavanne.test", "long-owner-password")
+    const response = await json("GET", "/me", undefined, cookie)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { authenticated: boolean; email?: string; permissions: string[] }
+    expect(body.authenticated).toBe(true)
+    expect(body.email).toBe("owner@pointesavanne.test")
+    expect(body.permissions).toContain("booking:read-all")
+    expect(body.permissions).toContain("booking:validate")
+  })
+})
+
 describe("booking api", () => {
   test("an anonymous quotation request is denied at the bus (403 Unauthorized)", async () => {
     const response = await json("POST", "/bookings/quotation", {

@@ -1,7 +1,8 @@
 import { Component, inject, signal } from "@angular/core"
-import { RouterLink } from "@angular/router"
-import { BookingService, VILLA_ID } from "../core/booking.service"
-import { euros, estimateStay, nightsBetween, WEEKLY_BASE } from "../shared/estimate"
+import { Router, RouterLink } from "@angular/router"
+import { nightsBetween, stayQueryParams } from "../core/form-state"
+import { writeStay } from "../core/form-storage"
+import { WEEKLY_BASE } from "../shared/estimate"
 
 interface DispoMessage {
   readonly text: string
@@ -81,7 +82,7 @@ interface Step {
             </svg>
           </span>
         </label>
-        <button type="button" class="btn btn-md search-button" (click)="checkAvailability()" [disabled]="checking()">
+        <button type="button" class="btn btn-md search-button" (click)="allerAuDevis()">
           Vérifier les disponibilités
         </button>
       </div>
@@ -911,13 +912,12 @@ interface Step {
   `,
 })
 export class HomePage {
-  readonly #bookings = inject(BookingService)
+  readonly #router = inject(Router)
 
   readonly arrivee = signal("")
   readonly depart = signal("")
   readonly voyageurs = signal("2")
   readonly dispo = signal<DispoMessage | null>(null)
-  readonly checking = signal(false)
 
   readonly priceCards: PriceCard[] = [
     { icon: "tag", top: "À partir de", big: `${WEEKLY_BASE.toLocaleString("fr-FR")} €`, sub: "la semaine" },
@@ -948,35 +948,25 @@ export class HomePage {
     this.voyageurs.set((event.target as HTMLSelectElement).value)
   }
 
-  /** Checks the villa's real availability, with the design's estimate summary. */
-  async checkAvailability(): Promise<void> {
-    const from = this.arrivee()
-    const to = this.depart()
-    const nights = nightsBetween(from, to)
-    if (nights === 0) {
+  /**
+   * The funnel entry: with both dates, head straight to the quotation page
+   * (it re-checks live availability) carrying the stay as query params and
+   * per-session storage. Without both dates, ask inline — no dead ends.
+   */
+  allerAuDevis(): void {
+    const stay = { arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() }
+    if (stay.arrivee === "" || stay.depart === "") {
       this.dispo.set({
         text: "Indiquez une date d'arrivée et une date de départ pour vérifier les disponibilités.",
         ok: false,
       })
       return
     }
-    const estimate = estimateStay(from, to)
-    const estimateText = (available: boolean): string => {
-      const suffix = estimate !== null && estimate.discountPercent > 0 ? ` · remise de ${estimate.discountPercent} % appliquée` : ""
-      const total = estimate === null ? "" : ` · estimation ${euros(estimate.total)} € (ménage inclus)`
-      return available
-        ? `Dates disponibles · ${nights} nuits${total}${suffix}.`
-        : `Ces dates ne sont pas disponibles. Choisissez une autre période ou demandez un devis.`
+    if (nightsBetween(stay.arrivee, stay.depart) === 0) {
+      this.dispo.set({ text: "La date de départ doit être postérieure à la date d'arrivée.", ok: false })
+      return
     }
-    this.checking.set(true)
-    try {
-      const { available } = await this.#bookings.checkAvailability(VILLA_ID, from, to)
-      this.dispo.set({ text: estimateText(available), ok: available })
-    } catch {
-      // The availability service is unreachable: still show the local estimate.
-      this.dispo.set({ text: estimateText(true), ok: true })
-    } finally {
-      this.checking.set(false)
-    }
+    writeStay(stay)
+    void this.#router.navigate(["/devis"], { queryParams: stayQueryParams(stay) })
   }
 }

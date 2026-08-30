@@ -42,6 +42,9 @@ type HeaderVariant = "overlay" | "solid" | "owner"
             <a routerLink="/" fragment="reservation" class="nav-link">Réservation</a>
             @if (auth.signedIn()) {
               <a routerLink="/espace-client" class="nav-link" [class.active]="active() === 'espace'">Mon espace</a>
+              @if (auth.isOwner()) {
+                <a routerLink="/proprietaire/reservations" class="nav-link">Gestion</a>
+              }
               <button type="button" class="btn-ghost nav-cta" (click)="signOut()">Déconnexion</button>
             } @else {
               <a routerLink="/connexion" class="nav-link" [class.active]="active() === 'connexion'">Connexion</a>

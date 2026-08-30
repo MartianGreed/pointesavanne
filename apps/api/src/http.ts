@@ -15,7 +15,7 @@ import * as HttpApiSchema from "@effect/platform/HttpApiSchema"
 import * as HttpApp from "@effect/platform/HttpApp"
 import * as HttpServerRequest from "@effect/platform/HttpServerRequest"
 import * as HttpServerResponse from "@effect/platform/HttpServerResponse"
-import { Effect, Layer, Schema } from "effect"
+import { Effect, Layer, Option, Schema } from "effect"
 import * as AST from "effect/SchemaAST"
 import {
   AppAuthTag,
@@ -30,8 +30,10 @@ import {
   SaveProfile,
   SignQuotation,
   ValidateQuotation,
+  policy,
   resolvePrincipal,
 } from "@pointesavanne/domain"
+import { Authorization, Principal } from "@structure-ai/authorization"
 
 // ---------------------------------------------------------------------------
 // API declaration — the OpenAPI contract is generated from this.
@@ -86,9 +88,20 @@ const customers = ApiGroup.make("customers")
   .add(HttpCqrs.commandEndpoint("saveProfile", "/customers/profile", SaveProfile))
   .add(HttpCqrs.queryEndpoint("getProfile", "/customers/profile", GetProfile))
 
+const session = ApiGroup.make("session").add(
+  ApiEndpoint.get("me")`/me`.addSuccess(
+    Schema.Struct({
+      authenticated: Schema.Boolean,
+      email: Schema.optional(Schema.String),
+      permissions: Schema.Array(Schema.String),
+    }),
+  ),
+)
+
 export const appApi = Api.make("pointesavanne")
   .add(bookings)
   .add(customers)
+  .add(session)
   .add(Health.group)
   .pipe(annotate({ title: "Villa Pointe Savanne API", version: "1.0.0" }))
 
@@ -134,8 +147,29 @@ const CustomersLive = HttpApiBuilder.group(appApi, "customers", (handlers) =>
     .handle("getProfile", HttpCqrs.query(GetProfile)),
 )
 
+/** GET /me — the session's principal and its policy-derived permissions. */
+const SessionLive = HttpApiBuilder.group(appApi, "session", (handlers) =>
+  handlers.handle("me", () =>
+    Effect.gen(function* () {
+      const authorization = yield* Authorization
+      const user = Option.getOrUndefined(yield* Principal.current)
+      const permissions: string[] = []
+      for (const permission of authorization.policy.permissions) {
+        if (yield* authorization.can(permission)) permissions.push(permission)
+      }
+      const email = user?.attributes?.email
+      return {
+        authenticated: user !== undefined && user.kind !== "anonymous",
+        ...(typeof email === "string" && email !== "" ? { email } : {}),
+        permissions,
+      }
+    }),
+  ),
+)
+
 export const ApiLive = HttpApiBuilder.api(appApi).pipe(
-  Layer.provide([BookingsLive, CustomersLive, Health.layer(appApi)]),
+  Layer.provide([BookingsLive, CustomersLive, SessionLive, Health.layer(appApi)]),
+  Layer.provide(Authorization.layer(policy)),
 )
 
 // ---------------------------------------------------------------------------
