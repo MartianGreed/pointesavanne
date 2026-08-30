@@ -1,6 +1,17 @@
 # Client
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.6.
+Angular 22 (SSR) client for the Villa du Cassier Jaune booking platform.
+
+## Passkeys
+
+The connexion page offers sign-in with a passkey, and the customer area
+(Mon profil → Clé d'accès) enrolls one for the signed-in account. Both use the
+auth API's `/auth/passkeys/*` endpoints and the browser's WebAuthn API.
+
+Passkeys are bound to the origin the browser sees: the API's `BASE_URL`
+(origin and RP ID) must match the deployed client origin. For local
+development with `ng serve`, set `BASE_URL=http://localhost:4200` in the
+monorepo `.env` (see `.env.dist`).
 
 ## Development server
 
@@ -38,10 +49,10 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 ## Running unit tests
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+Pure TypeScript helpers (no DOM) are tested with Bun:
 
 ```bash
-ng test
+bun test
 ```
 
 ## Running end-to-end tests

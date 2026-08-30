@@ -1,5 +1,13 @@
 import { Injectable, computed, inject, signal } from "@angular/core"
 import { Api } from "./api"
+import {
+  authenticatePasskey,
+  createPasskey,
+  type PasskeyAuthenticationOptions,
+  type PasskeyAuthenticationResult,
+  type PasskeyRegistrationOptions,
+  type PasskeyRegistrationResult,
+} from "./passkey"
 
 export interface SessionUser {
   readonly id: string
@@ -59,5 +67,36 @@ export class Auth {
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await this.#api.post("/auth/password/change", { currentPassword, newPassword })
+  }
+
+  // --- passkeys -------------------------------------------------------------
+
+  /**
+   * Enrolls a passkey for the signed-in user: fetches creation options,
+   * runs the browser ceremony, and verifies the result with the API.
+   * Requires an authenticated session (the cookie travels with the request).
+   */
+  async registerPasskey(): Promise<void> {
+    const options = await this.#api.post<PasskeyRegistrationOptions>(
+      "/auth/passkeys/register/options",
+      {},
+    )
+    const result = await createPasskey(options)
+    await this.#api.post("/auth/passkeys/register/verify", result satisfies PasskeyRegistrationResult)
+  }
+
+  /**
+   * Signs in with a passkey. With an e-mail, the ceremony is restricted to
+   * that account's credentials; without one, discoverable credentials let
+   * the browser offer the right account. Refreshes the session on success.
+   */
+  async signInWithPasskey(email?: string): Promise<void> {
+    const options = await this.#api.post<PasskeyAuthenticationOptions>(
+      "/auth/passkeys/authenticate/options",
+      email === undefined || email === "" ? {} : { email },
+    )
+    const result = await authenticatePasskey(options)
+    await this.#api.post("/auth/passkeys/authenticate/verify", result satisfies PasskeyAuthenticationResult)
+    await this.refresh()
   }
 }
