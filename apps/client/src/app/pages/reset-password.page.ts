@@ -7,31 +7,70 @@ import { Auth } from "../core/auth.service"
   selector: "app-reset-password",
   imports: [FormsModule, RouterLink],
   template: `
-    <main class="auth">
-      <h1>Nouveau mot de passe</h1>
-      @if (done()) {
-        <p class="ok">Votre mot de passe est modifié.</p>
-        <p><a routerLink="/connexion">Se connecter</a></p>
-      } @else {
-        @if (error()) {
-          <p class="error">{{ error() }}</p>
+    <section class="wrap">
+      <div class="card">
+        <h1 class="title">Nouveau mot de passe</h1>
+        @if (done()) {
+          <p class="ok">Votre mot de passe est modifié.</p>
+          <a routerLink="/connexion" class="btn btn-md">Se connecter</a>
+        } @else {
+          <p class="intro">Choisissez un nouveau mot de passe pour votre compte (8 caractères minimum).</p>
+          @if (error()) {
+            <div class="box box-err error">{{ error() }}</div>
+          }
+          <form #f="ngForm" (ngSubmit)="submit()" class="form">
+            <label class="field">
+              <span class="field-label">Nouveau mot de passe</span>
+              <input type="password" name="password" [(ngModel)]="password" required minlength="8" autocomplete="new-password" />
+            </label>
+            <button type="submit" class="btn btn-md" [disabled]="f.invalid || busy()">Enregistrer</button>
+          </form>
         }
-        <form #f="ngForm" (ngSubmit)="submit()">
-          <label>
-            Nouveau mot de passe (8 caractères minimum)
-            <input type="password" name="password" [(ngModel)]="password" required minlength="8" />
-          </label>
-          <button type="submit" [disabled]="f.invalid || busy()">Enregistrer</button>
-        </form>
-      }
-    </main>
+      </div>
+    </section>
   `,
   styles: `
-    .auth { max-width: 24rem; margin: 4rem auto; padding: 0 1rem; }
-    label { display: block; margin-bottom: 1rem; }
-    input { display: block; width: 100%; padding: 0.5rem; margin-top: 0.25rem; }
-    .error { color: #b3261e; }
-    .ok { color: #0d5c4d; }
+    .wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 56px 24px 72px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 36px 38px;
+    }
+    .title {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 32px;
+      color: var(--title);
+      margin: 0 0 14px;
+    }
+    .intro {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: var(--muted);
+      margin: 0 0 24px;
+    }
+    .form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .error {
+      margin-bottom: 20px;
+    }
+    .ok {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--ok-ink);
+      background: var(--ok-bg);
+      border-radius: 5px;
+      padding: 14px 16px;
+      margin: 0 0 20px;
+    }
   `,
 })
 export class ResetPasswordPage {
