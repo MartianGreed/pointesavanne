@@ -1,4 +1,4 @@
-import { Component, inject, signal } from "@angular/core"
+import { Component, OnInit, inject, signal } from "@angular/core"
 import { ActivatedRoute, RouterLink } from "@angular/router"
 import { Auth } from "../core/auth.service"
 
@@ -7,39 +7,70 @@ import { Auth } from "../core/auth.service"
   selector: "app-verify-email",
   imports: [RouterLink],
   template: `
-    <main class="auth">
-      <h1>Vérification de votre e-mail</h1>
-      @if (state() === "pending") {
-        <p>Vérification en cours…</p>
-      } @else if (state() === "ok") {
-        <p class="ok">Votre adresse e-mail est vérifiée.</p>
-        <p><a routerLink="/connexion">Se connecter</a></p>
-      } @else {
-        <p class="error">Ce lien est invalide ou a expiré.</p>
-        <p><a routerLink="/connexion">Retour à la connexion</a></p>
-      }
-    </main>
+    <section class="wrap">
+      <div class="card">
+        <h1 class="title">Vérification de votre e-mail</h1>
+        @if (state() === "pending") {
+          <p class="intro">Vérification en cours…</p>
+        } @else if (state() === "ok") {
+          <p class="ok">Votre adresse e-mail est vérifiée.</p>
+          <a routerLink="/connexion" class="btn btn-md">Se connecter</a>
+        } @else {
+          <div class="box box-err error">Ce lien est invalide ou a expiré.</div>
+          <a routerLink="/connexion" class="btn btn-md">Retour à la connexion</a>
+        }
+      </div>
+    </section>
   `,
   styles: `
-    .auth { max-width: 24rem; margin: 4rem auto; padding: 0 1rem; }
-    .error { color: #b3261e; }
-    .ok { color: #0d5c4d; }
+    .wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 56px 24px 72px;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 36px 38px;
+    }
+    .title {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: 32px;
+      color: var(--title);
+      margin: 0 0 14px;
+    }
+    .intro {
+      font-size: 14.5px;
+      line-height: 1.65;
+      color: var(--muted);
+      margin: 0;
+    }
+    .error {
+      margin-bottom: 20px;
+    }
+    .ok {
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--ok-ink);
+      background: var(--ok-bg);
+      border-radius: 5px;
+      padding: 14px 16px;
+      margin: 0 0 20px;
+    }
   `,
 })
-export class VerifyEmailPage implements OnInitLike {
+export class VerifyEmailPage implements OnInit {
   readonly #route = inject(ActivatedRoute)
   readonly #auth = inject(Auth)
   readonly state = signal<"pending" | "ok" | "failed">("pending")
 
-  ngOnInitLike(): void {
+  ngOnInit(): void {
     const token = this.#route.snapshot.queryParamMap.get("token") ?? ""
     this.#auth
       .verifyEmail(token)
       .then(() => this.state.set("ok"))
       .catch(() => this.state.set("failed"))
   }
-}
-
-interface OnInitLike {
-  ngOnInitLike(): void
 }

@@ -1,1 +1,251 @@
-/* You can add global styles to this file, and also import other style files */
+/* ---------------------------------------------------------------------------
+   Villa du Cassier Jaune — design system.
+   Fonts (DM Sans + Cormorant Garamond) are loaded in index.html.
+   Palette and metrics are taken from the validated design.
+--------------------------------------------------------------------------- */
+
+:root {
+  --bg: #fcfaf6;
+  --ink: #3e4f47;
+  --ink-strong: #23413a;
+  --title: #1c3b31;
+  --label: #55665e;
+  --muted: #6a7a71;
+  --muted-2: #8b9a92;
+  --line: #e8e4da;
+  --line-soft: #f0ede5;
+  --accent: #d9552e;
+  --accent-hover: #c0461f;
+  --accent-ink: #a63a17;
+  --green: #1e4436;
+  --green-deep: #143a2c;
+  --green-hover: #16352a;
+  --cream: #f5efe5;
+  --sand: #f7e7cf;
+  --ok-bg: #eaf0ea;
+  --ok-ink: #1e4436;
+  --err-bg: #fbede7;
+  --err-ink: #a63a17;
+  --field-border: #dfe4e0;
+  --serif: "Cormorant Garamond", Georgia, serif;
+  --sans: "DM Sans", Helvetica, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  font-family: var(--sans);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: #b8431f;
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9aa7a0;
+}
+
+img {
+  max-width: 100%;
+}
+
+.app-main {
+  display: block;
+  position: relative;
+}
+
+/* Layout ------------------------------------------------------------------ */
+
+.container {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+
+/* Kicker — small uppercase section label ---------------------------------- */
+
+.kicker {
+  font-size: 12px;
+  letter-spacing: 0.26em;
+  color: var(--muted-2);
+}
+
+/* Buttons ------------------------------------------------------------------- */
+
+.btn {
+  display: inline-block;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn:hover {
+  background: var(--accent-hover);
+  color: #ffffff;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-lg {
+  padding: 15px 30px;
+  font-size: 15px;
+}
+
+.btn-md {
+  padding: 14px 26px;
+  font-size: 14.5px;
+}
+
+.btn-sm {
+  padding: 12px 20px;
+  font-size: 13.5px;
+}
+
+.btn-xs {
+  padding: 9px 14px;
+  font-size: 12.5px;
+}
+
+.btn-outline {
+  background: #ffffff;
+  border: 1px solid #c6cfc8;
+  color: #33443c;
+}
+
+.btn-outline:hover {
+  background: #ffffff;
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.btn-green {
+  background: var(--green);
+}
+
+.btn-green:hover {
+  background: var(--green-hover);
+}
+
+.btn-plain-danger {
+  background: transparent;
+  color: var(--accent-ink);
+}
+
+.btn-plain-danger:hover {
+  background: var(--err-bg);
+}
+
+/* Forms --------------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.field > .field-label {
+  font-size: 13.5px;
+  color: var(--label);
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--field-border);
+  border-radius: 5px;
+  font-size: 14px;
+  color: var(--ink-strong);
+  background: #ffffff;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+/* Cards and message boxes --------------------------------------------------- */
+
+.card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.box {
+  padding: 13px 16px;
+  border-radius: 5px;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.box-ok {
+  background: var(--ok-bg);
+  color: var(--ok-ink);
+}
+
+.box-err {
+  background: var(--err-bg);
+  color: var(--err-ink);
+}
+
+/* Status badges ------------------------------------------------------------- */
+
+.badge {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* Serif page titles ---------------------------------------------------------- */
+
+.title-serif {
+  font-family: var(--serif);
+  font-weight: 400;
+  color: var(--title);
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* Responsive ----------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .container {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
