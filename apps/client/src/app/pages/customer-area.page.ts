@@ -2,6 +2,7 @@ import { Component, computed, inject, signal, viewChild } from "@angular/core"
 import { ElementRef } from "@angular/core"
 import { RouterLink } from "@angular/router"
 import { Auth } from "../core/auth.service"
+import { passkeyErrorMessage } from "../core/passkey-errors"
 import { BookingService, type BookingRow } from "../core/booking.service"
 import { ProfileService, type Profile } from "../core/profile.service"
 import { longDate, statusStyle } from "../shared/booking-status"
@@ -169,6 +170,21 @@ interface DocumentRow {
                   <span class="field-label">Confirmer le nouveau mot de passe</span>
                   <input type="password" [value]="nouveauMdp2()" (input)="nouveauMdp2.set(inputValue($event))" autocomplete="new-password" />
                 </label>
+              </div>
+
+              <div class="passkey-block">
+                <span class="field-label">Clé d'accès (connexion sans mot de passe)</span>
+                <p class="passkey-text">
+                  Enregistrez une clé d'accès sur cet appareil — Face ID, Touch ID, Windows Hello ou une
+                  clé de sécurité USB — pour vous connecter en un geste, sans mot de passe.
+                </p>
+                <button type="button" class="btn btn-outline btn-sm" (click)="ajouterPasskey()" [disabled]="busy()">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-right: 8px;">
+                    <circle cx="8" cy="15" r="4.2"></circle>
+                    <path d="M10.8 12.2L21 2M16 7l3 3M13 10l2 2"></path>
+                  </svg>
+                  Enregistrer une clé d'accès
+                </button>
               </div>
 
               @if (message(); as m) {
@@ -397,6 +413,22 @@ interface DocumentRow {
       grid-template-columns: 1fr 1fr 1fr;
       gap: 20px;
     }
+    .passkey-block {
+      border-top: 1px solid var(--line-soft);
+      margin-top: 26px;
+      padding-top: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .passkey-text {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--muted);
+      margin: 0 0 6px;
+      max-width: 46em;
+    }
     .hidden-input {
       display: none;
     }
@@ -571,6 +603,23 @@ export class CustomerAreaPage {
     } catch (e) {
       const problem = e as { problem?: { issues?: string[]; message?: string } }
       this.message.set({ text: problem.problem?.issues?.[0] ?? problem.problem?.message ?? "Enregistrement impossible.", ok: false })
+    } finally {
+      this.busy.set(false)
+    }
+  }
+
+  /** Enrolls a passkey for the signed-in user via the browser ceremony. */
+  async ajouterPasskey(): Promise<void> {
+    this.busy.set(true)
+    this.message.set(null)
+    try {
+      await this.#auth.registerPasskey()
+      this.message.set({
+        text: "Clé d'accès enregistrée. Vous pouvez maintenant vous connecter sans mot de passe depuis cet appareil.",
+        ok: true,
+      })
+    } catch (e) {
+      this.message.set({ text: passkeyErrorMessage(e, "Enregistrement de la clé d'accès impossible."), ok: false })
     } finally {
       this.busy.set(false)
     }

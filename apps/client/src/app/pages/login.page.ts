@@ -1,6 +1,9 @@
-import { Component, inject, signal } from "@angular/core"
+import { Component, afterNextRender, inject, signal } from "@angular/core"
 import { Router, RouterLink } from "@angular/router"
 import { Auth } from "../core/auth.service"
+import { ApiError } from "../core/api"
+import { passkeysSupported } from "../core/passkey"
+import { passkeyErrorMessage } from "../core/passkey-errors"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -114,6 +117,18 @@ type Mode = "connexion" | "inscription"
         <button type="button" class="btn btn-lg submit" (click)="soumettre()" [disabled]="busy()">
           {{ mode() === "connexion" ? "Se connecter" : "Créer mon compte" }}
         </button>
+
+        @if (mode() === "connexion" && passkeyOk()) {
+          <div class="divider"><span>ou</span></div>
+          <button type="button" class="passkey-btn" (click)="connexionPasskey()" [disabled]="busy()">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="8" cy="15" r="4.2"></circle>
+              <path d="M10.8 12.2L21 2M16 7l3 3M13 10l2 2"></path>
+            </svg>
+            Se connecter avec une clé d'accès
+          </button>
+          <p class="passkey-hint">Sans mot de passe, avec Face ID, Touch ID ou votre clé de sécurité.</p>
+        }
 
         <p class="terms">
           En continuant, vous acceptez nos
@@ -244,6 +259,50 @@ type Mode = "connexion" | "inscription"
       margin-top: 26px;
       width: 100%;
     }
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 22px;
+      color: var(--muted-2);
+      font-size: 13px;
+    }
+    .divider::before,
+    .divider::after {
+      content: "";
+      flex: 1;
+      border-top: 1px solid var(--field-border);
+    }
+    .passkey-btn {
+      margin-top: 16px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 0;
+      border: 1px solid var(--field-border);
+      border-radius: 5px;
+      background: #ffffff;
+      color: #33443c;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .passkey-btn:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .passkey-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .passkey-hint {
+      font-size: 12.5px;
+      color: var(--muted-2);
+      text-align: center;
+      margin: 12px 0 0;
+    }
     .terms {
       font-size: 12.5px;
       line-height: 1.6;
@@ -298,6 +357,12 @@ export class LoginPage {
   readonly erreur = signal("")
   readonly info = signal("")
   readonly busy = signal(false)
+  /** Set after render so SSR and hydration agree on the initial markup. */
+  readonly passkeyOk = signal(false)
+
+  constructor() {
+    afterNextRender(() => this.passkeyOk.set(passkeysSupported()))
+  }
 
   versConnexion(): void {
     this.mode.set("connexion")
@@ -348,14 +413,33 @@ export class LoginPage {
     }
   }
 
+  /** Passkey sign-in: uses the typed e-mail when present, discoverable otherwise. */
+  async connexionPasskey(): Promise<void> {
+    this.busy.set(true)
+    this.erreur.set("")
+    try {
+      const email = this.email().trim()
+      await this.#auth.signInWithPasskey(email === "" ? undefined : email)
+      await this.#router.navigate(["/espace-client"])
+    } catch (e) {
+      this.erreur.set(passkeyErrorMessage(e, "Connexion par clé d'accès impossible."))
+    } finally {
+      this.busy.set(false)
+    }
+  }
+
   private async seConnecter(): Promise<void> {
     this.busy.set(true)
     this.erreur.set("")
     try {
       await this.#auth.signIn(this.email(), this.mdp())
       await this.#router.navigate(["/espace-client"])
-    } catch {
-      this.erreur.set("Identifiants invalides. Vérifiez votre e-mail et votre mot de passe.")
+    } catch (e) {
+      if (e instanceof ApiError && e.problem.error === "EmailNotVerified") {
+        this.erreur.set("Votre adresse e-mail n'est pas encore vérifiée. Suivez le lien reçu par e-mail, puis reconnectez-vous.")
+      } else {
+        this.erreur.set("Identifiants invalides. Vérifiez votre e-mail et votre mot de passe.")
+      }
     } finally {
       this.busy.set(false)
     }
@@ -373,7 +457,7 @@ export class LoginPage {
         phoneNumber: "",
       })
       this.info.set(
-        `Votre compte a bien été créé, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous.`,
+        `Votre compte a bien été créé, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous. Après votre première connexion, vous pourrez enregistrer une clé d'accès pour vous connecter sans mot de passe.`,
       )
     } catch (e) {
       const problem = e as { problem?: { issues?: string[]; message?: string } }
