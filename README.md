@@ -33,6 +33,7 @@ apps/
 bun install
 docker compose up -d        # local PostgreSQL
 cp .env.dist .env           # then adjust OWNER_EMAILS / ADMIN_MAIL
+# optional: .env.local overrides .env per key, for personal local values
 
 bun run dev                 # api on :3000 (bun --watch) + client on :4200
 ```
