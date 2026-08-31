@@ -9,6 +9,7 @@ import { ResetPasswordPage } from "./pages/reset-password.page"
 import { QuotationPage } from "./pages/quotation.page"
 import { CustomerAreaPage } from "./pages/customer-area.page"
 import { OwnerBookingsPage } from "./pages/owner-bookings.page"
+import { OwnerRateCardPage } from "./pages/owner-rate-card.page"
 
 export const routes: Routes = [
   { path: "", component: HomePage },
@@ -21,5 +22,6 @@ export const routes: Routes = [
   { path: "devis", component: QuotationPage },
   { path: "espace-client", component: CustomerAreaPage, canActivate: [authGuard] },
   { path: "proprietaire/reservations", component: OwnerBookingsPage, canActivate: [ownerGuard] },
+  { path: "proprietaire/tarifs", component: OwnerRateCardPage, canActivate: [ownerGuard] },
   { path: "**", redirectTo: "" },
 ]

@@ -17,10 +17,9 @@ import {
   FileStore,
   Mailer,
   QuotationPdf,
+  RateCardVillaCatalog,
   TENANT_ID,
-  defaultVilla,
   handlers,
-  MutableVillaCatalog,
   runWorkersOnce,
   tenantConfigOf,
   viewMigrations,
@@ -47,8 +46,6 @@ const config: ApiConfig = {
 
 const mails: Array<{ to: string; subject: string; body: string }> = []
 const files = new Map<string, Uint8Array>()
-const catalog = MutableVillaCatalog()
-catalog.set(defaultVilla)
 
 // The auth test kit: the real auth service + Web handler over in-memory
 // doubles, with every e-mail (tokens included) recorded for the steps below.
@@ -92,7 +89,7 @@ const TestLayers = serveTest.pipe(
       QuotationPdf.of({ render: (booking) => Effect.succeed(new TextEncoder().encode(`devis:${booking.bookingId}`)) }),
     ),
   ),
-  Layer.provideMerge(catalog.layer),
+  Layer.provideMerge(RateCardVillaCatalog),
   Layer.provideMerge(Layer.succeed(DomainConfigTag, config)),
   Layer.provideMerge(AppAuthLive),
   Layer.provideMerge(Migrations.layer(viewMigrations)),
@@ -414,6 +411,129 @@ describe("quotation lead funnel", () => {
   })
 })
 
+describe("pricing (the owner's rate card)", () => {
+  // Registers (idempotently — the owner already exists from the /me tests)
+  // and returns the session cookie.
+  const signInAs = async (email: string, password: string): Promise<string> => {
+    await json("POST", "/auth/register/password", { email, password })
+    const verification = authEmails.find((mail) => mail.kind === "email-verification" && mail.to === email)
+    if (verification !== undefined) await json("POST", "/auth/verify-email", { token: verification.token })
+    const signedIn = await json("POST", "/auth/sign-in/password", { email, password })
+    expect(signedIn.status).toBe(200)
+    return signedIn.headers.get("set-cookie")!.split(";")[0]!
+  }
+
+  test("seasons are owner-only: anonymous and customers are denied", async () => {
+    const anonymousList = await json("GET", "/pricing/seasons?villaId=villa-de-standing-pointe-savanne")
+    expect(anonymousList.status).toBe(403)
+    const anonymousDefine = await json("POST", "/pricing/seasons", {
+      villaId: "villa-de-standing-pointe-savanne",
+      from: "2099-01-05",
+      to: "2099-02-05",
+      weeklyAmount: 1400,
+    })
+    expect(anonymousDefine.status).toBe(403)
+
+    const customerCookie = await signInAs("pricing-customer@example.com", "long-customer-password")
+    const denied = await json(
+      "GET",
+      "/pricing/seasons?villaId=villa-de-standing-pointe-savanne",
+      undefined,
+      customerCookie,
+    )
+    expect(denied.status).toBe(403)
+  })
+
+  test("the owner manages seasonal prices: seeded card, define, overlap rejection, removal", async () => {
+    const cookie = await signInAs("owner@pointesavanne.test", "long-owner-password")
+
+    // The card seeds itself from the legacy code card on first access.
+    const seeded = await json("GET", "/pricing/seasons?villaId=villa-de-standing-pointe-savanne", undefined, cookie)
+    expect(seeded.status).toBe(200)
+    const seasons = ((await seeded.json()) as {
+      items: Array<{ seasonId: string; from: string; to: string; weeklyAmount: number }>
+    }).items
+    expect(seasons.length).toBeGreaterThan(0)
+    // What the code card covered, the seeded card still covers.
+    expect(seasons.some((season) => season.from <= "2026-09-05" && season.to >= "2026-09-12")).toBe(true)
+
+    // Define a price for a brand-new period.
+    const defined = await json(
+      "POST",
+      "/pricing/seasons",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2099-01-05",
+        to: "2099-02-05",
+        weeklyAmount: 1400,
+      },
+      cookie,
+    )
+    expect(defined.status).toBe(200)
+    expect(((await defined.json()) as { seasonId: string }).seasonId).toBe("2099-01-05_2099-02-05")
+
+    // An overlapping period is a typed business failure (422).
+    const overlap = await json(
+      "POST",
+      "/pricing/seasons",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2099-02-01",
+        to: "2099-03-01",
+        weeklyAmount: 1600,
+      },
+      cookie,
+    )
+    expect(overlap.status).toBe(422)
+    expect(((await overlap.json()) as { _tag: string; issues: string[] }).issues[0]).toContain("2099-01-05 - 2099-02-05")
+
+    // Removal takes the period back out.
+    const removed = await json(
+      "POST",
+      "/pricing/seasons/removal",
+      { villaId: "villa-de-standing-pointe-savanne", seasonId: "2099-01-05_2099-02-05" },
+      cookie,
+    )
+    expect(removed.status).toBe(200)
+    const after = await json("GET", "/pricing/seasons?villaId=villa-de-standing-pointe-savanne", undefined, cookie)
+    const remaining = ((await after.json()) as { items: Array<{ seasonId: string }> }).items
+    expect(remaining.some((season) => season.seasonId === "2099-01-05_2099-02-05")).toBe(false)
+  })
+
+  test("an owner-defined price prices new quotations end to end", async () => {
+    const ownerCookie = await signInAs("owner@pointesavanne.test", "long-owner-password")
+    const defined = await json(
+      "POST",
+      "/pricing/seasons",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2098-03-01",
+        to: "2098-04-30",
+        weeklyAmount: 1400,
+      },
+      ownerCookie,
+    )
+    expect(defined.status).toBe(200)
+
+    const customerCookie = await signInAs("pricing-quote@example.com", "long-customer-password")
+    const requested = await json(
+      "POST",
+      "/bookings/quotation",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2098-03-09",
+        to: "2098-03-16",
+        adultsCount: 2,
+        childrenCount: 0,
+      },
+      customerCookie,
+    )
+    expect(requested.status).toBe(200)
+    const quotation = (await requested.json()) as { pricing: { totalAmount: number } }
+    expect(quotation.pricing.totalAmount).toBe(1400)
+  })
+})
+
 describe("health and docs", () => {
   test("/health/live answers, /openapi.json documents the api", async () => {
     const live = await json("GET", "/health/live")
@@ -425,6 +545,7 @@ describe("health and docs", () => {
     expect(spec.info.title).toBe("Villa Pointe Savanne API")
     expect(spec.paths["/bookings/quotation"]).toBeDefined()
     expect(spec.paths["/customers/profile"]).toBeDefined()
+    expect(spec.paths["/pricing/seasons"]).toBeDefined()
     // /auth/* is the framework's Web handler mounted at the edge, not a
     // declared api group — it is intentionally not part of the OpenAPI spec.
   })

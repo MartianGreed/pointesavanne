@@ -38,7 +38,9 @@ describe("Booking aggregate (decider)", () => {
   })
 
   test("rejects dates outside every seasonal range", async () => {
-    const error = await fail(Aggregate.execute(Booking, Booking.initial, requestCommand("2030-01-01", "2030-01-08")))
+    // Far beyond the card's rolling horizon (currentYear + 2) on purpose:
+    // the card now projects forward, so a near-future year would go stale.
+    const error = await fail(Aggregate.execute(Booking, Booking.initial, requestCommand("2099-01-06", "2099-01-13")))
     expect(error._tag).toBe("ValidationFailed")
   })
 

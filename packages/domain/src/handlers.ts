@@ -6,20 +6,29 @@ import { ConcurrencyConflict, EntityId, InvariantViolation, NotFound, Validation
 import { Effect, Option } from "effect"
 import { Booking, BookingId, type BookingStatus, type PricingSnapshot } from "./booking/booking.ts"
 import { dates } from "./booking/pricing.ts"
-import { VillaCatalog } from "./catalog.ts"
+import {
+  VillaCatalog,
+  ensureRateCard,
+  knownVillaId,
+  seedSeasons,
+} from "./catalog.ts"
 import { CustomerId, CustomerProfile } from "./customer/profile.ts"
-import { bookingRegistry, leadRegistry, profileRegistry } from "./events.ts"
+import { bookingRegistry, leadRegistry, profileRegistry, rateCardRegistry } from "./events.ts"
 import { FileNotFound, FileStore, QuotationPdf, quotationPath } from "./infra.ts"
 import { ViewModel, ViewStore } from "@structure-ai/viewmodel"
 import { QuotationLead, leadIdOf } from "./lead/lead.ts"
+import { RateCard, rateCardIdOf, seasonIdOf } from "./ratecard/ratecard.ts"
 import {
   CheckAvailability,
   ClaimQuotationLeads,
+  DefineSeason,
   GenerateQuotation,
   GetBooking,
   GetProfile,
   ListAllBookings,
   ListMyBookings,
+  ListSeasons,
+  RemoveSeason,
   RequestQuotation,
   SaveProfile,
   SignQuotation,
@@ -421,6 +430,73 @@ export const handlers = HandlerRegistry.layer(
 
   QueryHandler.make(CheckAvailability, (payload) =>
     Effect.map(dieInfra(isVillaAvailable(payload.villaId, payload.from, payload.to)), (available) => ({ available })),
+  ),
+
+  // --- pricing (the owner's rate card) ----------------------------------------
+
+  CommandHandler.make(DefineSeason, (payload, dispatch) =>
+    Effect.gen(function* () {
+      if (payload.villaId !== knownVillaId()) {
+        return yield* new NotFound({ entity: "villa", id: payload.villaId })
+      }
+      yield* ensureRateCard(payload.villaId, seedSeasons())
+      const store = yield* AggregateStore.make(RateCard, rateCardRegistry)
+      const result = yield* dieInfra(
+        store.executeWithRetry(
+          rateCardIdOf(payload.villaId),
+          {
+            _tag: "DefineSeason",
+            id: rateCardIdOf(payload.villaId),
+            villaId: payload.villaId,
+            from: payload.from,
+            to: payload.to,
+            weeklyAmount: payload.weeklyAmount,
+          },
+          { correlationId: dispatch.correlationId, causationId: dispatch.messageId },
+        ),
+      )
+      const season = result.state.seasons.find((s) => s.seasonId === seasonIdOf(payload.from, payload.to))
+      if (season === undefined) {
+        return yield* new ValidationFailed({ subject: "season", issues: ["season was not recorded"] })
+      }
+      return { villaId: payload.villaId, seasonId: season.seasonId, from: season.from, to: season.to, weeklyAmount: season.weeklyAmount }
+    }),
+  ),
+
+  CommandHandler.make(RemoveSeason, (payload, dispatch) =>
+    Effect.gen(function* () {
+      if (payload.villaId !== knownVillaId()) {
+        return yield* new NotFound({ entity: "villa", id: payload.villaId })
+      }
+      yield* ensureRateCard(payload.villaId, seedSeasons())
+      const store = yield* AggregateStore.make(RateCard, rateCardRegistry)
+      yield* dieInfra(
+        store.executeWithRetry(
+          rateCardIdOf(payload.villaId),
+          { _tag: "RemoveSeason", id: rateCardIdOf(payload.villaId), villaId: payload.villaId, seasonId: payload.seasonId },
+          { correlationId: dispatch.correlationId, causationId: dispatch.messageId },
+        ),
+      )
+      return { villaId: payload.villaId, seasonId: payload.seasonId }
+    }),
+  ),
+
+  QueryHandler.make(ListSeasons, (payload) =>
+    Effect.gen(function* () {
+      if (payload.villaId !== knownVillaId()) {
+        return yield* new NotFound({ entity: "villa", id: payload.villaId })
+      }
+      const card = yield* ensureRateCard(payload.villaId, seedSeasons())
+      return {
+        items: card.seasons.map((season) => ({
+          villaId: payload.villaId,
+          seasonId: season.seasonId,
+          from: season.from,
+          to: season.to,
+          weeklyAmount: season.weeklyAmount,
+        })),
+      }
+    }),
   ),
 
   // --- profile ----------------------------------------------------------------

@@ -204,6 +204,41 @@ export const CheckAvailability = Query.define("CheckAvailability", {
   failure: NotFoundFailure,
 })
 
+// --- pricing (the owner's rate card) -----------------------------------------
+
+export const SeasonRow = Schema.Struct({
+  seasonId: Schema.String,
+  villaId: Schema.String,
+  from: isoDay,
+  to: isoDay,
+  weeklyAmount: money,
+})
+export type SeasonRowType = typeof SeasonRow.Type
+
+/** The owner defines a seasonal price for an inclusive period of days. */
+export const DefineSeason = Command.define("DefineSeason", {
+  payload: Schema.Struct({
+    villaId: Schema.String,
+    from: isoDay,
+    to: isoDay,
+    weeklyAmount: Schema.Number.pipe(Schema.positive()),
+  }),
+  success: SeasonRow,
+  failure: AppFailure,
+})
+
+export const RemoveSeason = Command.define("RemoveSeason", {
+  payload: Schema.Struct({ villaId: Schema.String, seasonId: Schema.String }),
+  success: Schema.Struct({ villaId: Schema.String, seasonId: Schema.String }),
+  failure: AppFailure,
+})
+
+export const ListSeasons = Query.define("ListSeasons", {
+  payload: Schema.Struct({ villaId: Schema.String }),
+  success: Schema.Struct({ items: Schema.Array(SeasonRow) }),
+  failure: NotFoundFailure,
+})
+
 // --- profile ----------------------------------------------------------------
 
 export const SaveProfile = Command.define("SaveProfile", {
