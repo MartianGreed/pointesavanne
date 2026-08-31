@@ -30,6 +30,12 @@ type HeaderVariant = 'overlay' | 'solid' | 'owner';
 
         @if (variant() === 'owner') {
           <nav class="nav">
+            <a routerLink="/proprietaire/reservations" class="nav-link">{{
+              i18n.t('navigation.management')
+            }}</a>
+            <a routerLink="/proprietaire/tarifs" class="nav-link">{{
+              i18n.t('navigation.seasonPricing')
+            }}</a>
             <a routerLink="/" class="nav-link">{{ i18n.t('navigation.viewSite') }}</a>
             <a routerLink="/espace-client" class="nav-link">{{
               i18n.t('navigation.customerView')
