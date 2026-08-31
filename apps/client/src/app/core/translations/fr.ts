@@ -184,6 +184,7 @@ export const frenchTranslations = {
   'owner.actions.approve': 'Valider la réservation',
   'owner.actions.reject': 'Refuser',
   'owner.actions.remind': 'Relancer',
+  'owner.actions.signedDocument': 'Voir le devis signé',
   'owner.emptyFilter': 'Aucune réservation dans ce filtre.',
   'owner.upcoming.title': 'Prochains séjours confirmés',
   'owner.upcoming.empty': 'Aucun séjour confirmé pour le moment.',

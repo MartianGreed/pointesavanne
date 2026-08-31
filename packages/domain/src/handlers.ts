@@ -14,7 +14,7 @@ import {
 } from "./catalog.ts"
 import { CustomerId, CustomerProfile } from "./customer/profile.ts"
 import { bookingRegistry, leadRegistry, profileRegistry, rateCardRegistry } from "./events.ts"
-import { FileNotFound, FileStore, QuotationPdf, quotationPath } from "./infra.ts"
+import { FileNotFound, FileStore, QuotationPdf, quotationPath, signedDocumentPath } from "./infra.ts"
 import { ViewModel, ViewStore } from "@structure-ai/viewmodel"
 import { QuotationLead, leadIdOf } from "./lead/lead.ts"
 import { RateCard, rateCardIdOf, seasonIdOf } from "./ratecard/ratecard.ts"
@@ -345,7 +345,7 @@ export const handlers = HandlerRegistry.layer(
   CommandHandler.make(SignQuotation, (payload, dispatch) =>
     Effect.gen(function* () {
       const files = yield* FileStore
-      const path = `booking/${payload.bookingId}/signed/${payload.fileName}`
+      const path = signedDocumentPath(payload.bookingId, payload.fileName)
       // The upload must exist before the booking can advance — the legacy
       // FileNotFoundException, as a NotFound at the boundary.
       yield* files.read(path).pipe(

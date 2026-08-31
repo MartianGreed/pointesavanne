@@ -133,6 +133,9 @@ part of the generated OpenAPI spec; their contract is documented in
   scaling horizontally.
 - **Quotation PDFs** are currently rendered as HTML (the legacy dompdf
   pipeline's input) behind a port; byte-true PDF rendering is a drop-in later.
+  The download endpoints (`GET /bookings/{id}/quotation`,
+  `GET /bookings/{id}/signed-document`) sniff the stored bytes: real PDFs are
+  served as `application/pdf`, the HTML interim renders inline.
 - **`@effect/sql` Migrator bug**: its pg `ensureTable` aborts the migration
   transaction by probing with a deliberate error; the app pre-creates the
   bookkeeping table (idempotent) — see `apps/api/src/migrations.ts`.

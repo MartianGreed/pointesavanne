@@ -39,3 +39,27 @@ Feature: Accept a quotation request
       | valentin@pupucecorp.com    | valentin   | 0601020304  | Valentin      | Dosimont | 25 place Grégoire Bordillon | NULL  | 49100 Angers |
       | cloe.maz@gmail.com         | cloemaz29  | 0602030405  | Cloé          | Mazeau   | NULL                        | NULL  | NULL         |
       | jean-baptiste@domergue.net | jbdomergue | 0603040506  | Jean-Baptiste | Domergue | NULL                        | NULL  | NULL         |
+
+
+  Scenario: The owner validates a signed quotation
+    Given "valentin@pupucecorp.com" is logged in
+    And the villa owner "owner@pointesavanne.test" is registered
+    And "Villa de standing - Pointe Savanne" has a quotation request by "valentin@pupucecorp.com" from "30/05/2022" to "13/06/2022" for 4 adults and 2 children
+    And quotation has been generated
+    And the signed quotation is uploaded
+    When customer has signed quotation
+    And the owner validates the quotation
+    Then the booking should in state "contract-sent"
+    And 1 emails should have been sent
+    And the customer email should quote "validé"
+
+  Scenario: The owner rejects a signed quotation with a reason
+    Given "valentin@pupucecorp.com" is logged in
+    And the villa owner "owner@pointesavanne.test" is registered
+    And "Villa de standing - Pointe Savanne" has a quotation request by "valentin@pupucecorp.com" from "30/05/2022" to "13/06/2022" for 4 adults and 2 children
+    And quotation has been generated
+    And the signed quotation is uploaded
+    When customer has signed quotation
+    And the owner rejects the quotation with reason "Les dates chevauchent une autre réservation"
+    Then 1 emails should have been sent
+    And the customer email should quote "Les dates chevauchent une autre réservation"

@@ -278,6 +278,59 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
         }),
       ).pipe(Effect.asVoid)
     },
+    // The owner's decision reaches the customer: a validation confirms the
+    // stay (contract and payment terms follow), a rejection explains why —
+    // quoting the reason the owner gave.
+    QuotationValidated: (event, stored, ctx) => {
+      if (!ctx.live) return Effect.void
+      return Inbox.dedupe("notifications", stored.metadata.eventId)(
+        Effect.gen(function* () {
+          const { state } = yield* bookingOf(event.bookingId)
+          const profile = yield* profileOf(state.customerId ?? "").pipe(Effect.orDie)
+          const mailer = yield* Mailer
+          yield* mailer.send({
+            to: profile.email ?? "",
+            subject: "Votre réservation est confirmée — Villa Pointe Savanne",
+            body: mailBody([
+              `Bonjour ${profile.firstname ?? ""},`,
+              "",
+              `Bonne nouvelle : votre devis (réservation ${event.bookingId}) a été validé.`,
+              ...(state.from !== undefined && state.to !== undefined
+                ? [`Séjour confirmé du ${dates.format(dates.parse(state.from))} au ${dates.format(dates.parse(state.to))}.`]
+                : []),
+              ...(state.pricing !== undefined
+                ? [`Acompte à régler : ${formatEuros(state.pricing.depositAmount)}`]
+                : []),
+              "",
+              "Le contrat et les modalités de paiement de l'acompte vous sont adressés ;",
+              "votre séjour est réservé aux dates convenues.",
+            ]),
+          })
+        }),
+      ).pipe(Effect.asVoid)
+    },
+    QuotationRejected: (event, stored, ctx) => {
+      if (!ctx.live) return Effect.void
+      return Inbox.dedupe("notifications", stored.metadata.eventId)(
+        Effect.gen(function* () {
+          const { state } = yield* bookingOf(event.bookingId)
+          const profile = yield* profileOf(state.customerId ?? "").pipe(Effect.orDie)
+          const mailer = yield* Mailer
+          yield* mailer.send({
+            to: profile.email ?? "",
+            subject: "Votre demande de devis — Villa Pointe Savanne",
+            body: mailBody([
+              `Bonjour ${profile.firstname ?? ""},`,
+              "",
+              `Votre devis (réservation ${event.bookingId}) n'a malheureusement pas pu être validé.`,
+              ...(event.reason !== "" ? ["", `Motif : ${event.reason}`] : []),
+              "",
+              "Nous restons à votre disposition pour étudier d'autres dates ou modalités.",
+            ]),
+          })
+        }),
+      ).pipe(Effect.asVoid)
+    },
   },
 })
 

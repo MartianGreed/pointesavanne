@@ -2,7 +2,7 @@ import { Given, Then, When, type StepContext, ddMmYyyyToIso, norm } from "@struc
 import { Principal } from "@structure-ai/authorization"
 import { Cause, Effect, Exit, Schema } from "effect"
 import type { DomainWorld } from "../../composition.ts"
-import { GetBooking, SignQuotation } from "../../../src/messages/index.ts"
+import { GetBooking, SignQuotation, ValidateQuotation } from "../../../src/messages/index.ts"
 import { formatEuros, parsePrice } from "../../../src/booking/pricing.ts"
 import { quotationPath } from "../../../src/infra.ts"
 import { registerCustomer, submitQuotation } from "./support.ts"
@@ -157,6 +157,48 @@ export const bookingSteps = [
     }),
   ),
 
+  Given('the villa owner {string} is registered', ({ world, params }: Ctx<readonly [string]>) => {
+    const [email] = params
+    return registerCustomer(world, {
+      email,
+      password: "long-owner-password",
+      phoneNumber: "0609080706",
+      firstname: "Patron",
+      lastname: "Savanne",
+    })
+  }),
+
+  When('the owner validates the quotation', ({ world }: Ctx<readonly []>) => {
+    const owner = world.actorNamed("owner@pointesavanne.test")
+    if (owner === undefined) return Effect.die("the villa owner must be registered first")
+    world.emailCountMark = world.doubles.mails.length
+    return Effect.gen(function* () {
+      yield* world.dispatch(
+        ValidateQuotation,
+        { bookingId: world.quotationResult!.bookingId, accepted: true },
+        { actor: owner.id },
+      )
+      world.expectSuccess()
+      yield* world.runWorkers()
+    })
+  }),
+
+  When('the owner rejects the quotation with reason {string}', ({ world, params }: Ctx<readonly [string]>) => {
+    const [reason] = params
+    const owner = world.actorNamed("owner@pointesavanne.test")
+    if (owner === undefined) return Effect.die("the villa owner must be registered first")
+    world.emailCountMark = world.doubles.mails.length
+    return Effect.gen(function* () {
+      yield* world.dispatch(
+        ValidateQuotation,
+        { bookingId: world.quotationResult!.bookingId, accepted: false, reason },
+        { actor: owner.id },
+      )
+      world.expectSuccess()
+      yield* world.runWorkers()
+    })
+  }),
+
   Given('the signed quotation is uploaded', ({ world }: Ctx<readonly []>) => {
     const bookingId = world.quotationResult!.bookingId
     world.doubles.files.set(`booking/${bookingId}/signed/signed-quotation.pdf`, new TextEncoder().encode("signed"))
@@ -204,6 +246,18 @@ export const bookingSteps = [
     if (sinceMark !== count) {
       throw new Error(
         `expected ${count} new emails, got ${sinceMark}:\n${world.doubles.mails.map((m) => `- ${m.to}: ${m.subject}`).join("\n")}`,
+      )
+    }
+  }),
+
+  Then('the customer email should quote {string}', ({ world, params }: Ctx<readonly [string]>) => {
+    const [text] = params
+    const email = world.currentEmail
+    if (email === undefined) throw new Error("a customer must be logged in")
+    const toCustomer = world.doubles.mails.filter((mail) => mail.to === email)
+    if (!toCustomer.some((mail) => mail.body.includes(text))) {
+      throw new Error(
+        `no email to ${email} quotes "${text}":\n${world.doubles.mails.map((m) => `- ${m.to}: ${m.subject}`).join("\n")}`,
       )
     }
   }),
