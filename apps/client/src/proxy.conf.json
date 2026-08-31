@@ -4,5 +4,6 @@
   "/me": { "target": "http://localhost:3000", "secure": false },
   "/bookings": { "target": "http://localhost:3000", "secure": false },
   "/customers": { "target": "http://localhost:3000", "secure": false },
+  "/pricing": { "target": "http://localhost:3000", "secure": false },
   "/health": { "target": "http://localhost:3000", "secure": false }
 }
