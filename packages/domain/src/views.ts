@@ -7,8 +7,14 @@ import { Context, Effect, Schema } from "effect"
 import type { AppEvent } from "./events.ts"
 import { profileRegistry, registry } from "./events.ts"
 import { CustomerId, CustomerProfile } from "./customer/profile.ts"
-import { dates, formatEuros } from "./booking/pricing.ts"
 import { Mailer } from "./infra.ts"
+import { renderMail } from "./mail/layout.ts"
+import {
+  quotationReadyMail,
+  quotationRequestAdminMail,
+  quotationRequestCustomerMail,
+  quotationSignedAdminMail,
+} from "./mail/templates.ts"
 import { GenerateQuotation } from "./messages/index.ts"
 import { CommandBus } from "@structure-ai/cqrs"
 import { asSystem } from "./policy.ts"
@@ -174,25 +180,14 @@ export const isVillaAvailable = (villaId: string, from: string, to: string) =>
   )
 
 // ---------------------------------------------------------------------------
-// Notifications: emails sent from booking events. Each email is deduplicated
+// Notifications: emails sent from booking events, rendered from the shared
+// templates in mail/ (text + designed HTML). Each email is deduplicated
 // by event id through the inbox and suppressed on rebuilds (`live === false`),
 // so replays never resend and a crash between "decided" and "sent" retries.
 // ---------------------------------------------------------------------------
 
-const mailBody = (lines: ReadonlyArray<string>): string => lines.join("\n")
-
-const quotationSummary = (event: Extract<AppEvent, { _tag: "BookingRequested" }>): string =>
-  mailBody([
-    `Séjour : ${event.villaName}`,
-    `Du ${dates.format(dates.parse(event.from))} au ${dates.format(dates.parse(event.to))} (${event.nights} nuits)`,
-    `Occupants : ${event.adultsCount} adulte(s), ${event.childrenCount} enfant(s)`,
-    `Total séjour : ${formatEuros(event.pricing.totalAmount)}`,
-    `Taxe touristique (non classé) : ${formatEuros(event.pricing.unrankedTouristTax)}`,
-    `Taxe touristique (classé 4 étoiles) : ${formatEuros(event.pricing.rankedTouristTax)}`,
-    `Caution : ${formatEuros(event.pricing.depositAmount)}`,
-    `Ménage obligatoire : ${formatEuros(event.pricing.householdAmount)}`,
-    ...(event.message !== undefined ? ["", `Message du client : ${event.message}`] : []),
-  ])
+/** The customer area, where quotations are read, signed and uploaded. */
+const customerAreaUrl = (baseUrl: URL): string => new URL("/espace-client", baseUrl).toString()
 
 /** Authoritative booking state — never depends on projection progress. */
 const bookingOf = (bookingId: string) =>
@@ -213,29 +208,24 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
           const profile = yield* profileOf(event.customerId).pipe(Effect.orDie)
           const mailer = yield* Mailer
 
-          const summary = quotationSummary(event)
-          yield* mailer.send({
-            to: config.adminMail,
-            subject: `Nouvelle demande de devis — ${event.bookingId}`,
-            body: mailBody([
-              `Le client ${profile.firstname ?? ""} ${profile.lastname ?? ""} (${profile.email ?? ""}) a demandé un devis.`,
-              "",
-              summary,
-            ]),
-          })
-          yield* mailer.send({
-            to: profile.email ?? "",
-            subject: "Votre demande de devis — Villa Pointe Savanne",
-            body: mailBody([
-              `Bonjour ${profile.firstname ?? ""},`,
-              "",
-              "Nous avons bien reçu votre demande de devis :",
-              "",
-              summary,
-              "",
-              "Nous reviendrons vers vous très rapidement avec votre devis.",
-            ]),
-          })
+          yield* mailer.send(
+            renderMail(
+              config.adminMail,
+              quotationRequestAdminMail({
+                bookingId: event.bookingId,
+                customerName: `${profile.firstname ?? ""} ${profile.lastname ?? ""}`.trim(),
+                customerEmail: profile.email ?? "",
+                details: event,
+                message: event.message,
+              }),
+            ),
+          )
+          yield* mailer.send(
+            renderMail(
+              profile.email ?? "",
+              quotationRequestCustomerMail({ firstname: profile.firstname ?? "", details: event }),
+            ),
+          )
         }),
       ).pipe(Effect.asVoid)
     },
@@ -243,19 +233,19 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
       if (!ctx.live) return Effect.void
       return Inbox.dedupe("notifications", stored.metadata.eventId)(
         Effect.gen(function* () {
+          const config = yield* DomainConfigTag
           const { state } = yield* bookingOf(event.bookingId)
           const profile = yield* profileOf(state.customerId ?? "").pipe(Effect.orDie)
           const mailer = yield* Mailer
-          yield* mailer.send({
-            to: profile.email ?? "",
-            subject: "Votre devis — Villa Pointe Savanne",
-            body: mailBody([
-              "Bonjour,",
-              "",
-              `Votre devis (${event.pdfPath}) est disponible dans votre espace client.`,
-              "Après acceptation, merci de le signer et de le téléverser depuis votre espace.",
-            ]),
-          })
+          yield* mailer.send(
+            renderMail(
+              profile.email ?? "",
+              quotationReadyMail({
+                firstname: profile.firstname ?? "",
+                customerAreaUrl: customerAreaUrl(config.baseUrl),
+              }),
+            ),
+          )
         }),
       ).pipe(Effect.asVoid)
     },
@@ -265,16 +255,12 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
         Effect.gen(function* () {
           const config = yield* DomainConfigTag
           const mailer = yield* Mailer
-          yield* mailer.send({
-            to: config.adminMail,
-            subject: `Devis signé — ${event.bookingId}`,
-            body: mailBody([
-              "Un client a signé et téléversé son devis.",
-              "",
-              `Document : ${event.fileName}`,
-              `Réservation : ${event.bookingId}`,
-            ]),
-          })
+          yield* mailer.send(
+            renderMail(
+              config.adminMail,
+              quotationSignedAdminMail({ bookingId: event.bookingId, fileName: event.fileName }),
+            ),
+          )
         }),
       ).pipe(Effect.asVoid)
     },

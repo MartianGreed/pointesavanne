@@ -2,6 +2,8 @@ import type { AuthEmail, AuthService, TenantAuthConfig } from "@structure-ai/aut
 import { Principal } from "@structure-ai/authorization"
 import { Context, Effect, Option } from "effect"
 import { Mailer } from "./infra.ts"
+import { renderMail } from "./mail/layout.ts"
+import { authMail } from "./mail/templates.ts"
 import { TENANT_ID } from "./policy.ts"
 import { DomainConfigTag, ownerEmailList } from "./settings.ts"
 
@@ -43,13 +45,6 @@ export const tenantConfigOf = (baseUrl: URL): TenantAuthConfig => ({
   },
 })
 
-const mailSubject = (kind: AuthEmail["kind"]): string =>
-  kind === "email-verification"
-    ? "Vérifiez votre adresse e-mail — Villa Pointe Savanne"
-    : kind === "password-reset"
-      ? "Réinitialisation de votre mot de passe — Villa Pointe Savanne"
-      : "Votre lien de connexion — Villa Pointe Savanne"
-
 /**
  * SPA landing routes for one-time links. @structure-ai/auth hardcodes
  * /auth/* paths onto BASE_URL (the browser origin), but those are API paths:
@@ -71,12 +66,7 @@ const landingLinkOf = (email: AuthEmail): string => {
 }
 
 export const mailerEmailSender = Effect.map(Mailer, (mailer) => ({
-  send: (email: AuthEmail) =>
-    mailer.send({
-      to: email.to,
-      subject: mailSubject(email.kind),
-      body: ["Bonjour,", "", `Ce lien expire le ${email.expiresAt.toISOString()}:`, landingLinkOf(email)].join("\n"),
-    }),
+  send: (email: AuthEmail) => mailer.send(renderMail(email.to, authMail(email, landingLinkOf(email)))),
 }))
 
 /**

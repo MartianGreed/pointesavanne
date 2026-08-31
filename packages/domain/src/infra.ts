@@ -8,7 +8,10 @@ import { Context, Data, Effect, Layer } from "effect"
 export interface OutgoingMail {
   readonly to: string
   readonly subject: string
+  /** The plain-text part — always present, and the only part adapters must send. */
   readonly body: string
+  /** The designed part, rendered from the shared mail layout (see mail/). */
+  readonly html?: string
 }
 
 export class Mailer extends Context.Tag("pointesavanne/Mailer")<Mailer, { readonly send: (mail: OutgoingMail) => Effect.Effect<void> }>() {}
@@ -16,7 +19,12 @@ export class Mailer extends Context.Tag("pointesavanne/Mailer")<Mailer, { readon
 export const ConsoleMailer = Layer.succeed(
   Mailer,
   Mailer.of({
-    send: (mail) => Effect.logInfo(`mail to ${mail.to}: ${mail.subject}`).pipe(Effect.annotateLogs("mail", mail)),
+    // The HTML part is megabytes of markup over a day of traffic: the log
+    // keeps the text part, which carries every link and amount anyway.
+    send: (mail) =>
+      Effect.logInfo(`mail to ${mail.to}: ${mail.subject}`).pipe(
+        Effect.annotateLogs("mail", { to: mail.to, subject: mail.subject, body: mail.body }),
+      ),
   }),
 )
 
