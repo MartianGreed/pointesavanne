@@ -1,9 +1,11 @@
-import { Component, computed, inject, signal } from "@angular/core"
-import { RouterLink } from "@angular/router"
+import { Component, afterNextRender, computed, inject, signal } from "@angular/core"
+import { ActivatedRoute, Router, RouterLink } from "@angular/router"
 import { Auth } from "../core/auth.service"
 import { BookingService, VILLA_ID } from "../core/booking.service"
-import { ProfileService, type Profile } from "../core/profile.service"
-import { euros, estimateStay, nightsBetween } from "../shared/estimate"
+import { ProfileService } from "../core/profile.service"
+import { fillContactGaps, fillStayGaps, nightsBetween, type ContactState } from "../core/form-state"
+import { readContact, readStay, setDevisIntent, writeContact, writeStay } from "../core/form-storage"
+import { euros, estimateStay } from "../shared/estimate"
 
 type Availability = "unknown" | "checking" | "available" | "unavailable" | "invalid"
 
@@ -98,7 +100,7 @@ interface QuotationResult {
           </div>
           <div class="submit-row">
             <button type="button" class="btn btn-lg" (click)="submit()" [disabled]="busy()">Demander mon devis</button>
-            <span class="note">Sans engagement · réponse sous 24 h</span>
+            <span class="note">{{ auth.signedIn() ? "Sans engagement · réponse sous 24 h" : "Sans engagement · réponse sous 24 h · un compte est demandé à l'envoi" }}</span>
           </div>
           @if (formError()) {
             <div class="box box-err" style="margin-top: 18px;">{{ formError() }}</div>
@@ -384,7 +386,9 @@ interface QuotationResult {
   `,
 })
 export class QuotationPage {
-  readonly #auth = inject(Auth)
+  readonly #route = inject(ActivatedRoute)
+  readonly #router = inject(Router)
+  readonly auth = inject(Auth)
   readonly #bookings = inject(BookingService)
   readonly #profiles = inject(ProfileService)
 
@@ -428,13 +432,34 @@ export class QuotationPage {
   })
 
   constructor() {
-    void this.prefill()
+    // Query params (the landing handoff) render identically on server and
+    // client; browser-only storages are merged after hydration instead.
+    const params = this.#route.snapshot.queryParamMap
+    this.arrivee.set(params.get("arrivee") ?? "")
+    this.depart.set(params.get("depart") ?? "")
+    const guests = params.get("voyageurs")
+    this.voyageurs.set(guests !== null && guests !== "" ? guests : "2")
+
+    afterNextRender(() => {
+      const stay = fillStayGaps(
+        { arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() },
+        readStay(),
+      )
+      this.arrivee.set(stay.arrivee)
+      this.depart.set(stay.depart)
+      this.voyageurs.set(stay.voyageurs)
+      this.applyContact(readContact())
+      if (stay.arrivee !== "" && stay.depart !== "") void this.checkAvailability()
+    })
+
+    if (this.auth.signedIn()) void this.prefillFromProfile()
   }
 
   onArrivee(event: Event): void {
     this.arrivee.set((event.target as HTMLInputElement).value)
     this.result.set(null)
     this.envoye.set(false)
+    this.persistStay()
     void this.checkAvailability()
   }
 
@@ -442,16 +467,19 @@ export class QuotationPage {
     this.depart.set((event.target as HTMLInputElement).value)
     this.result.set(null)
     this.envoye.set(false)
+    this.persistStay()
     void this.checkAvailability()
   }
 
   onVoyageurs(event: Event): void {
     this.voyageurs.set((event.target as HTMLSelectElement).value)
+    this.persistStay()
   }
 
   setField(key: "prenom" | "nom" | "email" | "tel" | "message", event: Event): void {
     this[key].set((event.target as HTMLInputElement | HTMLTextAreaElement).value)
     this.formError.set("")
+    this.persistContact()
   }
 
   async submit(): Promise<void> {
@@ -468,6 +496,17 @@ export class QuotationPage {
       this.formError.set("Ces dates ne sont pas disponibles. Choisissez une autre période.")
       return
     }
+    this.persistStay()
+    this.persistContact()
+
+    // F1: sending the request requires an account — but nothing is lost:
+    // the whole form is persisted and login returns straight here.
+    if (!this.auth.signedIn()) {
+      setDevisIntent()
+      await this.#router.navigate(["/connexion"])
+      return
+    }
+
     this.busy.set(true)
     this.formError.set("")
     try {
@@ -505,21 +544,41 @@ export class QuotationPage {
     }
   }
 
-  private async prefill(): Promise<void> {
-    this.email.set(this.#auth.user()?.email ?? "")
+  /** Profile fills the gaps only — the visitor's own latest input wins. */
+  private async prefillFromProfile(): Promise<void> {
     try {
       const { profile } = await this.#profiles.get()
-      if (profile !== null) this.applyProfile(profile)
+      if (profile !== null) {
+        this.applyContact({
+          prenom: profile.firstname || undefined,
+          nom: profile.lastname || undefined,
+          email: profile.email || undefined,
+          tel: profile.phoneNumber || undefined,
+        })
+      }
     } catch {
-      // Signed-in but no profile yet: keep the e-mail prefill only.
+      // No profile yet (or offline): keep whatever the storages restored.
     }
   }
 
-  private applyProfile(profile: Profile): void {
-    this.prenom.set(profile.firstname)
-    this.nom.set(profile.lastname)
-    this.email.set(profile.email)
-    this.tel.set(profile.phoneNumber)
+  /** Gap-fills the contact fields; never overwrites what the visitor typed. */
+  private applyContact(source: Partial<ContactState>): void {
+    const merged = fillContactGaps(
+      { prenom: this.prenom(), nom: this.nom(), email: this.email(), tel: this.tel() },
+      source,
+    )
+    this.prenom.set(merged.prenom)
+    this.nom.set(merged.nom)
+    this.email.set(merged.email)
+    this.tel.set(merged.tel)
+  }
+
+  private persistStay(): void {
+    writeStay({ arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() })
+  }
+
+  private persistContact(): void {
+    writeContact({ prenom: this.prenom(), nom: this.nom(), email: this.email(), tel: this.tel() })
   }
 
   private async checkAvailability(): Promise<void> {
