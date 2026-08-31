@@ -50,12 +50,32 @@ const mailSubject = (kind: AuthEmail["kind"]): string =>
       ? "Réinitialisation de votre mot de passe — Villa Pointe Savanne"
       : "Votre lien de connexion — Villa Pointe Savanne"
 
+/**
+ * SPA landing routes for one-time links. @structure-ai/auth hardcodes
+ * /auth/* paths onto BASE_URL (the browser origin), but those are API paths:
+ * the dev-server proxy forwards /auth/* to the API, which only serves POST.
+ * Rewriting to the client's routes makes the e-mail link open the page that
+ * consumes the token; kinds without a landing page keep the library's URL.
+ */
+const spaLinkPaths: Partial<Record<AuthEmail["kind"], string>> = {
+  "email-verification": "/verification",
+  "password-reset": "/mot-de-passe/reinitialiser",
+}
+
+const landingLinkOf = (email: AuthEmail): string => {
+  const path = spaLinkPaths[email.kind]
+  if (path === undefined) return email.url
+  const url = new URL(email.url)
+  url.pathname = path
+  return url.toString()
+}
+
 export const mailerEmailSender = Effect.map(Mailer, (mailer) => ({
   send: (email: AuthEmail) =>
     mailer.send({
       to: email.to,
       subject: mailSubject(email.kind),
-      body: ["Bonjour,", "", `Ce lien expire le ${email.expiresAt.toISOString()}:`, email.url].join("\n"),
+      body: ["Bonjour,", "", `Ce lien expire le ${email.expiresAt.toISOString()}:`, landingLinkOf(email)].join("\n"),
     }),
 }))
 
