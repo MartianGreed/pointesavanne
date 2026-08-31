@@ -1,12 +1,14 @@
-import { Component, computed, inject, signal } from "@angular/core"
-import { BookingService, type BookingRow } from "../core/booking.service"
-import { shortDate, statusStyle } from "../shared/booking-status"
-import { euros } from "../shared/estimate"
+import { Component, computed, inject, signal } from '@angular/core';
+import { BookingService, type BookingRow } from '../core/booking.service';
+import { Internationalization } from '../core/internationalization';
+import { statusStyle } from '../shared/booking-status';
+
+type BookingFilter = 'all' | BookingRow['status'];
 
 interface StatCard {
-  readonly label: string
-  readonly value: string
-  readonly detail: string
+  readonly label: string;
+  readonly value: string;
+  readonly detail: string;
 }
 
 /**
@@ -14,12 +16,12 @@ interface StatCard {
  * and one row per booking with the validation actions.
  */
 @Component({
-  selector: "app-owner-bookings",
+  selector: 'app-owner-bookings',
   imports: [],
   template: `
     <section class="container layout">
       <div class="head">
-        <h1 class="title">Gestion des réservations</h1>
+        <h1 class="title">{{ i18n.t('owner.title') }}</h1>
       </div>
 
       <div class="stats">
@@ -42,8 +44,12 @@ interface StatCard {
 
       <div class="card table">
         <div class="table-head">
-          <span>CLIENT</span><span>SÉJOUR</span><span>VOYAGEURS</span><span>MONTANT</span><span>STATUT</span>
-          <span class="right">ACTIONS</span>
+          <span>{{ i18n.t('owner.table.client') }}</span
+          ><span>{{ i18n.t('owner.table.stay') }}</span
+          ><span>{{ i18n.t('owner.table.guests') }}</span
+          ><span>{{ i18n.t('owner.table.amount') }}</span
+          ><span>{{ i18n.t('owner.table.status') }}</span>
+          <span class="right">{{ i18n.t('owner.table.actions') }}</span>
         </div>
         @for (b of visible(); track b.bookingId) {
           <div class="row">
@@ -52,37 +58,41 @@ interface StatCard {
               <span class="client-ref">{{ b.bookingId }}</span>
             </span>
             <span class="cell-stay">
-              <span class="stay-dates">{{ shortDate(b.from) }} → {{ shortDate(b.to) }}</span>
-              <span class="stay-nights">{{ b.nights }} nuits</span>
+              <span class="stay-dates"
+                >{{ i18n.shortDate(b.from) }} → {{ i18n.shortDate(b.to) }}</span
+              >
+              <span class="stay-nights">{{ i18n.plural('common.nights', b.nights) }}</span>
             </span>
             <span class="cell-guests">{{ b.adultsCount + b.childrenCount }}</span>
-            <span class="cell-amount">{{ euros(b.totalAmount) }}</span>
+            <span class="cell-amount">{{ i18n.euros(b.totalAmount) }}</span>
             <span>
               <span
                 class="badge"
                 [style.background]="style(b.status).bg"
                 [style.color]="style(b.status).color"
               >
-                {{ style(b.status).label }}
+                {{ i18n.t(style(b.status).labelKey) }}
               </span>
             </span>
             <span class="cell-actions">
-              @if (b.status === "quotation-signed") {
+              @if (b.status === 'quotation-signed') {
                 <button type="button" class="btn btn-green btn-xs" (click)="valider(b)">
-                  Valider la réservation
+                  {{ i18n.t('owner.actions.approve') }}
                 </button>
                 <button type="button" class="btn btn-plain-danger btn-xs" (click)="refuser(b)">
-                  Refuser
+                  {{ i18n.t('owner.actions.reject') }}
                 </button>
               }
-              @if (b.status === "quotation-awaiting-acceptation") {
-                <button type="button" class="btn btn-outline btn-xs" (click)="relancer(b)">Relancer</button>
+              @if (b.status === 'quotation-awaiting-acceptation') {
+                <button type="button" class="btn btn-outline btn-xs" (click)="relancer(b)">
+                  {{ i18n.t('owner.actions.remind') }}
+                </button>
               }
             </span>
           </div>
         }
         @if (visible().length === 0) {
-          <div class="empty">Aucune réservation dans ce filtre.</div>
+          <div class="empty">{{ i18n.t('owner.emptyFilter') }}</div>
         }
       </div>
 
@@ -91,18 +101,23 @@ interface StatCard {
       }
 
       <div class="card upcoming">
-        <h2 class="upcoming-title">Prochains séjours confirmés</h2>
+        <h2 class="upcoming-title">{{ i18n.t('owner.upcoming.title') }}</h2>
         <div class="upcoming-list">
           @for (b of confirmed(); track b.bookingId) {
             <div class="upcoming-row">
               <span class="dot"></span>
-              <span class="upcoming-dates">{{ shortDate(b.from) }} → {{ shortDate(b.to) }}</span>
-              <span class="upcoming-meta">{{ b.customerId }} · {{ b.adultsCount + b.childrenCount }} voyageurs</span>
-              <span class="upcoming-amount">{{ euros(b.totalAmount) }}</span>
+              <span class="upcoming-dates"
+                >{{ i18n.shortDate(b.from) }} → {{ i18n.shortDate(b.to) }}</span
+              >
+              <span class="upcoming-meta"
+                >{{ b.customerId }} ·
+                {{ i18n.plural('common.travelers', b.adultsCount + b.childrenCount) }}</span
+              >
+              <span class="upcoming-amount">{{ i18n.euros(b.totalAmount) }}</span>
             </div>
           }
           @if (confirmed().length === 0) {
-            <div class="upcoming-none">Aucun séjour confirmé pour le moment.</div>
+            <div class="upcoming-none">{{ i18n.t('owner.upcoming.empty') }}</div>
           }
         </div>
       </div>
@@ -323,78 +338,113 @@ interface StatCard {
   `,
 })
 export class OwnerBookingsPage {
-  readonly #bookings = inject(BookingService)
+  readonly i18n = inject(Internationalization);
+  readonly #bookings = inject(BookingService);
 
-  readonly filters = ["Tout", "quotation-requested", "quotation-awaiting-acceptation", "quotation-signed", "contract-sent"] as const
-  readonly filtre = signal<string>("Tout")
-  readonly bookings = signal<BookingRow[]>([])
-  readonly notification = signal("")
+  readonly filters: readonly BookingFilter[] = [
+    'all',
+    'quotation-requested',
+    'quotation-awaiting-acceptation',
+    'quotation-signed',
+    'contract-sent',
+  ];
+  readonly filtre = signal<BookingFilter>('all');
+  readonly bookings = signal<BookingRow[]>([]);
+  readonly notification = signal('');
 
-  readonly style = statusStyle
-  readonly shortDate = shortDate
-  readonly euros = euros
+  readonly style = statusStyle;
 
   readonly visible = computed(() => {
-    const filtre = this.filtre()
-    return filtre === "Tout" ? this.bookings() : this.bookings().filter((b) => b.status === filtre)
-  })
+    const filtre = this.filtre();
+    return filtre === 'all' ? this.bookings() : this.bookings().filter((b) => b.status === filtre);
+  });
 
   readonly confirmed = computed(() =>
     [...this.bookings()]
-      .filter((b) => b.status === "contract-sent")
+      .filter((b) => b.status === 'contract-sent')
       .sort((a, b) => a.from.localeCompare(b.from)),
-  )
+  );
 
   readonly stats = computed<StatCard[]>(() => {
-    const all = this.bookings()
-    const count = (status: string): number => all.filter((b) => b.status === status).length
-    const confirmedBookings = all.filter((b) => b.status === "contract-sent")
-    const revenue = confirmedBookings.reduce((total, b) => total + b.totalAmount, 0)
+    const all = this.bookings();
+    const count = (status: string): number => all.filter((b) => b.status === status).length;
+    const confirmedBookings = all.filter((b) => b.status === 'contract-sent');
+    const revenue = confirmedBookings.reduce((total, b) => total + b.totalAmount, 0);
     return [
-      { label: "Nouvelles demandes", value: String(count("quotation-requested")), detail: "à traiter" },
-      { label: "Devis en attente", value: String(count("quotation-awaiting-acceptation")), detail: "envoyés, non signés" },
-      { label: "À valider", value: String(count("quotation-signed")), detail: "devis signés par le client" },
-      { label: "Revenus confirmés", value: euros(revenue), detail: `${confirmedBookings.length} réservation(s)` },
-    ]
-  })
+      {
+        label: this.i18n.t('owner.stats.new.label'),
+        value: String(count('quotation-requested')),
+        detail: this.i18n.t('owner.stats.new.detail'),
+      },
+      {
+        label: this.i18n.t('owner.stats.pending.label'),
+        value: String(count('quotation-awaiting-acceptation')),
+        detail: this.i18n.t('owner.stats.pending.detail'),
+      },
+      {
+        label: this.i18n.t('owner.stats.validation.label'),
+        value: String(count('quotation-signed')),
+        detail: this.i18n.t('owner.stats.validation.detail'),
+      },
+      {
+        label: this.i18n.t('owner.stats.revenue.label'),
+        value: this.i18n.euros(revenue),
+        detail: this.i18n.plural('owner.stats.bookings', confirmedBookings.length),
+      },
+    ];
+  });
 
   constructor() {
-    void this.load()
+    void this.load();
   }
 
-  label(filter: string): string {
-    return filter === "Tout" ? "Tout" : statusStyle(filter).label
+  label(filter: BookingFilter): string {
+    return this.i18n.t(filter === 'all' ? 'gallery.categories.all' : statusStyle(filter).labelKey);
   }
 
-  setFiltre(filter: string): void {
-    this.filtre.set(filter)
-    this.notification.set("")
+  setFiltre(filter: BookingFilter): void {
+    this.filtre.set(filter);
+    this.notification.set('');
   }
 
   async load(): Promise<void> {
     try {
-      const { items } = await this.#bookings.allBookings()
-      this.bookings.set(items)
+      const { items } = await this.#bookings.allBookings();
+      this.bookings.set(items);
     } catch {
-      this.bookings.set([])
+      this.bookings.set([]);
     }
   }
 
   async valider(booking: BookingRow): Promise<void> {
-    await this.#bookings.validateQuotation(booking.bookingId, true)
+    await this.#bookings.validateQuotation(booking.bookingId, true);
     this.notification.set(
-      `Réservation ${booking.bookingId} confirmée. ${booking.customerId} a été notifié(e).`,
-    )
-    await this.load()
+      this.i18n.t('owner.notifications.approved', {
+        bookingId: booking.bookingId,
+        customerId: booking.customerId,
+      }),
+    );
+    await this.load();
   }
 
   async refuser(booking: BookingRow): Promise<void> {
-    await this.#bookings.validateQuotation(booking.bookingId, false, "Documents incomplets")
-    this.notification.set(`Demande ${booking.bookingId} refusée.`)
-    await this.load()
+    await this.#bookings.validateQuotation(
+      booking.bookingId,
+      false,
+      this.i18n.t('owner.rejectionReason'),
+    );
+    this.notification.set(
+      this.i18n.t('owner.notifications.rejected', { bookingId: booking.bookingId }),
+    );
+    await this.load();
   }
 
   relancer(booking: BookingRow): void {
-    this.notification.set(`Relance envoyée à ${booking.customerId} pour le devis ${booking.bookingId}.`)
+    this.notification.set(
+      this.i18n.t('owner.notifications.reminded', {
+        customerId: booking.customerId,
+        bookingId: booking.bookingId,
+      }),
+    );
   }
 }

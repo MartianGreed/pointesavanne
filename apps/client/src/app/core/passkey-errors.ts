@@ -1,4 +1,6 @@
-import { ApiError } from "./api"
+import { ApiError } from './api';
+import { Internationalization } from './internationalization';
+import type { ErrorTranslationKey } from './translations/fr';
 
 /**
  * Maps passkey-ceremony failures onto safe, actionable French messages.
@@ -8,30 +10,39 @@ import { ApiError } from "./api"
  */
 
 const errorTag = (e: unknown): string => {
-  if (e instanceof ApiError) return e.problem.error ?? ""
-  if (typeof e === "object" && e !== null && "error" in e && typeof (e as { error: unknown }).error === "string") {
-    return (e as { error: string }).error
+  if (e instanceof ApiError) return e.problem.error ?? '';
+  if (
+    typeof e === 'object' &&
+    e !== null &&
+    'error' in e &&
+    typeof (e as { error: unknown }).error === 'string'
+  ) {
+    return (e as { error: string }).error;
   }
-  return ""
-}
+  return '';
+};
 
 /** One message per known failure mode, falling back to `fallback`. */
-export const passkeyErrorMessage = (e: unknown, fallback: string): string => {
-  if (e instanceof DOMException && e.name === "NotAllowedError") {
-    return "Opération annulée ou clé d'accès non disponible sur cet appareil."
+export const passkeyErrorMessage = (
+  e: unknown,
+  i18n: Internationalization,
+  fallbackKey: ErrorTranslationKey,
+): string => {
+  if (e instanceof DOMException && e.name === 'NotAllowedError') {
+    return i18n.t('errors.passkey.cancelled');
   }
-  const tag = errorTag(e)
-  if (tag === "InvalidCredentials") {
-    return "Aucune clé d'accès reconnue. Connectez-vous avec votre mot de passe, puis enregistrez une clé d'accès depuis votre espace client."
+  const tag = errorTag(e);
+  if (tag === 'InvalidCredentials') {
+    return i18n.t('errors.passkey.unrecognized');
   }
-  if (tag === "UnsupportedPasskey") {
-    return "Cette clé d'accès ou ce navigateur n'est pas pris en charge."
+  if (tag === 'UnsupportedPasskey') {
+    return i18n.t('errors.backend.unsupportedPasskey');
   }
-  if (tag === "EmailNotVerified") {
-    return "Vérifiez d'abord votre adresse e-mail (lien reçu par e-mail)."
+  if (tag === 'EmailNotVerified') {
+    return i18n.t('errors.passkey.emailNotVerified');
   }
-  if (tag === "InvalidAuthToken") {
-    return "La demande a expiré. Réessayez."
+  if (tag === 'InvalidAuthToken') {
+    return i18n.t('errors.backend.invalidAuthToken');
   }
-  return fallback
-}
+  return i18n.t(fallbackKey);
+};

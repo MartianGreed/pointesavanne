@@ -1,28 +1,29 @@
-import { Component, inject, signal } from "@angular/core"
-import { FormsModule } from "@angular/forms"
-import { RouterLink } from "@angular/router"
-import { Auth } from "../core/auth.service"
+import { Component, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { Auth } from '../core/auth.service';
+import { Internationalization } from '../core/internationalization';
 
 @Component({
-  selector: "app-forgot-password",
+  selector: 'app-forgot-password',
   imports: [FormsModule, RouterLink],
   template: `
     <section class="wrap">
       <div class="card">
-        <h1 class="title">Mot de passe oublié</h1>
+        <h1 class="title">{{ i18n.t('forgotPassword.title') }}</h1>
         @if (done()) {
-          <p class="ok">
-            Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d'être envoyé.
-          </p>
-          <a routerLink="/connexion" class="btn btn-md">Retour à la connexion</a>
+          <p class="ok">{{ i18n.t('forgotPassword.sent') }}</p>
+          <a routerLink="/connexion" class="btn btn-md">{{ i18n.t('auth.backToSignIn') }}</a>
         } @else {
-          <p class="intro">Saisissez votre adresse e-mail : nous vous enverrons un lien de réinitialisation.</p>
+          <p class="intro">{{ i18n.t('forgotPassword.intro') }}</p>
           <form #f="ngForm" (ngSubmit)="submit()" class="form">
             <label class="field">
-              <span class="field-label">E-mail</span>
+              <span class="field-label">{{ i18n.t('fields.email') }}</span>
               <input type="email" name="email" [(ngModel)]="email" required autocomplete="email" />
             </label>
-            <button type="submit" class="btn btn-md" [disabled]="f.invalid || busy()">Envoyer le lien</button>
+            <button type="submit" class="btn btn-md" [disabled]="f.invalid || busy()">
+              {{ i18n.t('forgotPassword.submit') }}
+            </button>
           </form>
         }
       </div>
@@ -70,18 +71,19 @@ import { Auth } from "../core/auth.service"
   `,
 })
 export class ForgotPasswordPage {
-  readonly #auth = inject(Auth)
-  email = ""
-  readonly busy = signal(false)
-  readonly done = signal(false)
+  readonly i18n = inject(Internationalization);
+  readonly #auth = inject(Auth);
+  email = '';
+  readonly busy = signal(false);
+  readonly done = signal(false);
 
   async submit(): Promise<void> {
-    this.busy.set(true)
+    this.busy.set(true);
     try {
-      await this.#auth.requestPasswordReset(this.email)
-      this.done.set(true)
+      await this.#auth.requestPasswordReset(this.email);
+      this.done.set(true);
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 }

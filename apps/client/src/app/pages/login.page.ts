@@ -1,30 +1,30 @@
-import { Component, afterNextRender, inject, signal } from "@angular/core"
-import { ActivatedRoute, Router, RouterLink } from "@angular/router"
-import { Auth } from "../core/auth.service"
-import { ApiError } from "../core/api"
-import { BookingService } from "../core/booking.service"
-import { QuoteFunnelStore } from "../core/quote-funnel.store"
-import { passkeysSupported } from "../core/passkey"
-import { passkeyErrorMessage } from "../core/passkey-errors"
+import { Component, afterNextRender, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Auth } from '../core/auth.service';
+import { BookingService } from '../core/booking.service';
+import { Internationalization } from '../core/internationalization';
+import { passkeysSupported } from '../core/passkey';
+import { passkeyErrorMessage } from '../core/passkey-errors';
+import { QuoteFunnelStore } from '../core/quote-funnel.store';
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type Mode = "connexion" | "inscription"
+type Mode = 'connexion' | 'inscription';
 
 /**
  * The auth page from the design: an image panel beside a card that toggles
  * between sign-in and registration, both wired to the API's cookie sessions.
  */
 @Component({
-  selector: "app-login",
+  selector: 'app-login',
   imports: [RouterLink],
   template: `
     <section class="auth-grid">
       <div class="panel">
         <div class="panel-gradient"></div>
         <div class="panel-text">
-          <div class="panel-title">Votre séjour commence ici</div>
-          <div class="panel-sub">Devis, documents et suivi de réservation, réunis dans votre espace client.</div>
+          <div class="panel-title">{{ i18n.t('login.panel.title') }}</div>
+          <div class="panel-sub">{{ i18n.t('login.panel.subtitle') }}</div>
         </div>
       </div>
 
@@ -36,7 +36,7 @@ type Mode = "connexion" | "inscription"
             [class.active]="mode() === 'connexion'"
             (click)="versConnexion()"
           >
-            Connexion
+            {{ i18n.t('navigation.signIn') }}
           </button>
           <button
             type="button"
@@ -44,67 +44,75 @@ type Mode = "connexion" | "inscription"
             [class.active]="mode() === 'inscription'"
             (click)="versInscription()"
           >
-            Créer un compte
+            {{ i18n.t('login.createAccount') }}
           </button>
         </div>
 
-        <h1 class="title">{{ mode() === "connexion" ? "Heureux de vous revoir" : "Créez votre compte" }}</h1>
+        <h1 class="title">
+          {{ i18n.t(mode() === 'connexion' ? 'login.signIn.title' : 'login.register.title') }}
+        </h1>
         <p class="subtitle">
-          @{{
-            mode() === "connexion"
-              ? "Accédez à vos devis, documents et réservations."
-              : "Une minute suffit : votre compte vous permet de suivre votre demande de devis et votre réservation."
-          }}
+          {{ i18n.t(mode() === 'connexion' ? 'login.signIn.subtitle' : 'login.register.subtitle') }}
         </p>
 
         <div class="fields">
-          @if (mode() === "inscription") {
+          @if (mode() === 'inscription') {
             <div class="row-2">
               <label class="field">
-                <span class="field-label">Prénom</span>
-                <input type="text" [value]="prenom()" (input)="set('prenom', $event)" placeholder="Marie" />
+                <span class="field-label">{{ i18n.t('fields.firstname') }}</span>
+                <input
+                  type="text"
+                  [value]="prenom()"
+                  (input)="set('prenom', $event)"
+                  [placeholder]="i18n.t('placeholders.firstname')"
+                />
               </label>
               <label class="field">
-                <span class="field-label">Nom</span>
-                <input type="text" [value]="nom()" (input)="set('nom', $event)" placeholder="Dupont" />
+                <span class="field-label">{{ i18n.t('fields.lastname') }}</span>
+                <input
+                  type="text"
+                  [value]="nom()"
+                  (input)="set('nom', $event)"
+                  [placeholder]="i18n.t('placeholders.lastname')"
+                />
               </label>
             </div>
           }
           <label class="field">
-            <span class="field-label">E-mail</span>
+            <span class="field-label">{{ i18n.t('fields.email') }}</span>
             <input
               type="email"
               [value]="email()"
               (input)="set('email', $event)"
-              placeholder="marie.dupont@mail.com"
+              [placeholder]="i18n.t('placeholders.email')"
               autocomplete="email"
             />
           </label>
           <label class="field">
-            <span class="field-label">Mot de passe</span>
+            <span class="field-label">{{ i18n.t('fields.password') }}</span>
             <input
               type="password"
               [value]="mdp()"
               (input)="set('mdp', $event)"
-              placeholder="••••••••"
+              [placeholder]="i18n.t('placeholders.password')"
               [autocomplete]="mode() === 'connexion' ? 'current-password' : 'new-password'"
             />
           </label>
-          @if (mode() === "inscription") {
+          @if (mode() === 'inscription') {
             <label class="field">
-              <span class="field-label">Confirmer le mot de passe</span>
+              <span class="field-label">{{ i18n.t('fields.confirmPassword') }}</span>
               <input
                 type="password"
                 [value]="mdp2()"
                 (input)="set('mdp2', $event)"
-                placeholder="••••••••"
+                [placeholder]="i18n.t('placeholders.password')"
                 autocomplete="new-password"
               />
             </label>
           }
-          @if (mode() === "connexion") {
+          @if (mode() === 'connexion') {
             <div class="forgot">
-              <a routerLink="/mot-de-passe/oublie">Mot de passe oublié ?</a>
+              <a routerLink="/mot-de-passe/oublie">{{ i18n.t('login.forgotPassword') }}</a>
             </div>
           }
         </div>
@@ -117,24 +125,39 @@ type Mode = "connexion" | "inscription"
         }
 
         <button type="button" class="btn btn-lg submit" (click)="soumettre()" [disabled]="busy()">
-          {{ mode() === "connexion" ? "Se connecter" : "Créer mon compte" }}
+          {{ i18n.t(mode() === 'connexion' ? 'auth.signIn' : 'login.createMyAccount') }}
         </button>
 
-        @if (mode() === "connexion" && passkeyOk()) {
-          <div class="divider"><span>ou</span></div>
-          <button type="button" class="passkey-btn" (click)="connexionPasskey()" [disabled]="busy()">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+        @if (mode() === 'connexion' && passkeyOk()) {
+          <div class="divider">
+            <span>{{ i18n.t('common.or') }}</span>
+          </div>
+          <button
+            type="button"
+            class="passkey-btn"
+            (click)="connexionPasskey()"
+            [disabled]="busy()"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+            >
               <circle cx="8" cy="15" r="4.2"></circle>
               <path d="M10.8 12.2L21 2M16 7l3 3M13 10l2 2"></path>
             </svg>
-            Se connecter avec une clé d'accès
+            {{ i18n.t('login.passkey.action') }}
           </button>
-          <p class="passkey-hint">Sans mot de passe, avec Face ID, Touch ID ou votre clé de sécurité.</p>
+          <p class="passkey-hint">{{ i18n.t('login.passkey.hint') }}</p>
         }
 
         <p class="terms">
-          En continuant, vous acceptez nos
-          <a routerLink="/">conditions d'utilisation</a> et notre politique de confidentialité.
+          {{ i18n.t('login.terms.before') }}
+          <a routerLink="/">{{ i18n.t('login.terms.link') }}</a
+          >{{ i18n.t('login.terms.after') }}
         </p>
       </div>
     </section>
@@ -158,7 +181,7 @@ type Mode = "connexion" | "inscription"
       border-radius: 8px 0 0 8px;
       overflow: hidden;
       min-height: 560px;
-      background-image: url("/images/hamac-carbet.jpg");
+      background-image: url('/images/hamac-carbet.jpg');
       background-size: cover;
       background-position: center;
     }
@@ -267,7 +290,7 @@ type Mode = "connexion" | "inscription"
     }
     .divider::before,
     .divider::after {
-      content: "";
+      content: '';
       flex: 1;
       border-top: 1px solid var(--field-border);
     }
@@ -334,98 +357,101 @@ type Mode = "connexion" | "inscription"
   `,
 })
 export class LoginPage {
-  readonly #auth = inject(Auth)
-  readonly #router = inject(Router)
-  readonly #route = inject(ActivatedRoute)
-  readonly #bookings = inject(BookingService)
-  readonly #funnel = inject(QuoteFunnelStore)
+  readonly i18n = inject(Internationalization);
+  readonly #auth = inject(Auth);
+  readonly #router = inject(Router);
+  readonly #route = inject(ActivatedRoute);
+  readonly #bookings = inject(BookingService);
+  readonly #funnel = inject(QuoteFunnelStore);
 
-  readonly mode = signal<Mode>("connexion")
-  readonly prenom = signal("")
-  readonly nom = signal("")
-  readonly email = signal("")
-  readonly mdp = signal("")
-  readonly mdp2 = signal("")
-  readonly erreur = signal("")
-  readonly info = signal("")
-  readonly busy = signal(false)
+  readonly mode = signal<Mode>('connexion');
+  readonly prenom = signal('');
+  readonly nom = signal('');
+  readonly email = signal('');
+  readonly mdp = signal('');
+  readonly mdp2 = signal('');
+  readonly erreur = signal('');
+  readonly info = signal('');
+  readonly busy = signal(false);
   /** Set after render so SSR and hydration agree on the initial markup. */
-  readonly passkeyOk = signal(false)
+  readonly passkeyOk = signal(false);
 
   constructor() {
     afterNextRender(() => {
-      this.passkeyOk.set(passkeysSupported())
+      this.passkeyOk.set(passkeysSupported());
       // The devis funnel sends the visitor straight to account creation,
       // with the contact details they already typed.
-      if (this.#route.snapshot.queryParamMap.get("mode") === "inscription") this.mode.set("inscription")
-      const contact = this.#funnel.contact()
-      if (contact.prenom !== "") this.prenom.set(contact.prenom)
-      if (contact.nom !== "") this.nom.set(contact.nom)
-      if (contact.email !== "") this.email.set(contact.email)
-    })
+      if (this.#route.snapshot.queryParamMap.get('mode') === 'inscription') {
+        this.mode.set('inscription');
+      }
+      const contact = this.#funnel.contact();
+      if (contact.prenom !== '') this.prenom.set(contact.prenom);
+      if (contact.nom !== '') this.nom.set(contact.nom);
+      if (contact.email !== '') this.email.set(contact.email);
+    });
   }
 
   versConnexion(): void {
-    this.mode.set("connexion")
-    this.erreur.set("")
-    this.info.set("")
+    this.mode.set('connexion');
+    this.erreur.set('');
+    this.info.set('');
   }
 
   versInscription(): void {
-    this.mode.set("inscription")
-    this.erreur.set("")
-    this.info.set("")
+    this.mode.set('inscription');
+    this.erreur.set('');
+    this.info.set('');
   }
 
-  set(key: "prenom" | "nom" | "email" | "mdp" | "mdp2", event: Event): void {
-    this[key].set((event.target as HTMLInputElement).value)
-    this.erreur.set("")
+  set(key: 'prenom' | 'nom' | 'email' | 'mdp' | 'mdp2', event: Event): void {
+    this[key].set((event.target as HTMLInputElement).value);
+    this.erreur.set('');
   }
 
   async soumettre(): Promise<void> {
-    if (this.mode() === "connexion") {
+    if (this.mode() === 'connexion') {
       if (!EMAIL_PATTERN.test(this.email())) {
-        this.erreur.set("Saisissez une adresse e-mail valide.")
-        return
+        this.erreur.set(this.i18n.t('errors.validation.email'));
+        return;
       }
-      if (this.mdp() === "") {
-        this.erreur.set("Saisissez votre mot de passe.")
-        return
+      if (this.mdp() === '') {
+        this.erreur.set(this.i18n.t('errors.validation.passwordRequired'));
+        return;
       }
-      await this.seConnecter()
+      await this.seConnecter();
     } else {
-      if (this.prenom() === "" || this.nom() === "") {
-        this.erreur.set("Renseignez votre prénom et votre nom.")
-        return
+      if (this.prenom() === '' || this.nom() === '') {
+        this.erreur.set(this.i18n.t('errors.validation.nameRequired'));
+        return;
       }
       if (!EMAIL_PATTERN.test(this.email())) {
-        this.erreur.set("Saisissez une adresse e-mail valide.")
-        return
+        this.erreur.set(this.i18n.t('errors.validation.email'));
+        return;
       }
       if (this.mdp().length < 8) {
-        this.erreur.set("Le mot de passe doit contenir au moins 8 caractères.")
-        return
+        this.erreur.set(this.i18n.t('errors.validation.passwordLength'));
+        return;
       }
       if (this.mdp() !== this.mdp2()) {
-        this.erreur.set("Les deux mots de passe ne correspondent pas.")
-        return
+        this.erreur.set(this.i18n.t('errors.validation.passwordMismatch'));
+        return;
       }
-      await this.creerCompte()
+      await this.creerCompte();
     }
   }
 
   /** Passkey sign-in: uses the typed e-mail when present, discoverable otherwise. */
   async connexionPasskey(): Promise<void> {
-    this.busy.set(true)
-    this.erreur.set("")
+    this.busy.set(true);
+    this.erreur.set('');
     try {
-      const email = this.email().trim()
-      await this.#auth.signInWithPasskey(email === "" ? undefined : email)
-      await this.apresConnexion()
+      const email = this.email().trim();
+      await this.#auth.signInWithPasskey(email === '' ? undefined : email);
+      await this.apresConnexion();
     } catch (e) {
-      this.erreur.set(passkeyErrorMessage(e, "Connexion par clé d'accès impossible."))
+      this.erreur.set(passkeyErrorMessage(e, this.i18n, 'errors.passkey.signIn'));
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 
@@ -436,60 +462,57 @@ export class LoginPage {
    * area where the request is waiting, owners to their console.
    */
   private async apresConnexion(): Promise<void> {
-    let converted = false
+    let converted = false;
     try {
-      const outcome = await this.#bookings.claimLeads()
-      this.#funnel.recordClaim(outcome)
-      converted = outcome.claimed > 0 && outcome.bookings.length > 0
+      const outcome = await this.#bookings.claimLeads();
+      this.#funnel.recordClaim(outcome);
+      converted = outcome.claimed > 0 && outcome.bookings.length > 0;
     } catch {
       // A failed claim must never block the sign-in; the request can be
       // resent from /devis.
     }
     if (converted) {
-      await this.#router.navigate(["/espace-client"])
-      return
+      await this.#router.navigate(['/espace-client']);
+      return;
     }
-    await this.#router.navigate([this.#auth.isOwner() ? "/proprietaire/reservations" : "/espace-client"])
+    await this.#router.navigate([
+      this.#auth.isOwner() ? '/proprietaire/reservations' : '/espace-client',
+    ]);
   }
 
   private async seConnecter(): Promise<void> {
-    this.busy.set(true)
-    this.erreur.set("")
+    this.busy.set(true);
+    this.erreur.set('');
     try {
-      await this.#auth.signIn(this.email(), this.mdp())
-      await this.apresConnexion()
-    } catch (e) {
-      if (e instanceof ApiError && e.problem.error === "EmailNotVerified") {
-        this.erreur.set("Votre adresse e-mail n'est pas encore vérifiée. Suivez le lien reçu par e-mail, puis reconnectez-vous.")
-      } else {
-        this.erreur.set("Identifiants invalides. Vérifiez votre e-mail et votre mot de passe.")
-      }
+      await this.#auth.signIn(this.email(), this.mdp());
+      await this.apresConnexion();
+    } catch (cause) {
+      this.erreur.set(this.i18n.error(cause, 'errors.backend.invalidCredentials'));
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 
   private async creerCompte(): Promise<void> {
-    this.busy.set(true)
-    this.erreur.set("")
+    this.busy.set(true);
+    this.erreur.set('');
     try {
       await this.#auth.register({
         email: this.email(),
         password: this.mdp(),
         firstname: this.prenom(),
         lastname: this.nom(),
-        phoneNumber: "",
-      })
+        phoneNumber: '',
+      });
       this.info.set(
         this.#funnel.pendingLead()
-          ? `Votre demande de devis est enregistrée, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous — votre demande sera finalisée automatiquement.`
-          : `Votre compte a bien été créé, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous. Après votre première connexion, vous pourrez enregistrer une clé d'accès pour vous connecter sans mot de passe.`,
-      )
-    } catch (e) {
-      const problem = e as { problem?: { issues?: string[]; message?: string } }
-      this.erreur.set(problem.problem?.issues?.[0] ?? problem.problem?.message ?? "Inscription impossible.")
+          ? this.i18n.t('login.register.pendingLeadSuccess', { firstname: this.prenom() })
+          : this.i18n.t('login.register.success', { firstname: this.prenom() }),
+      );
+    } catch (cause) {
+      this.erreur.set(this.i18n.error(cause, 'errors.auth.registration'));
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 }

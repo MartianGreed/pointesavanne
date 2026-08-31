@@ -1,57 +1,58 @@
-import { Component, computed, inject, signal } from "@angular/core"
-import { NavigationEnd, Router, RouterLink } from "@angular/router"
-import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { filter } from "rxjs"
+import { Component, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs';
+import { Internationalization } from '../core/internationalization';
 
-type FooterVariant = "home" | "compact" | "owner"
+type FooterVariant = 'home' | 'compact' | 'owner';
 
 /** The deep-green footer box: full nav on the home page, compact elsewhere. */
 @Component({
-  selector: "app-site-footer",
+  selector: 'app-site-footer',
   imports: [RouterLink],
   template: `
     <footer class="site-footer">
-      @if (variant() === "home") {
+      @if (variant() === 'home') {
         <div class="footer-box">
           <div class="top">
             <a routerLink="/" class="brand">
               <img src="logo.png" alt="" />
               <span class="brand-text">
-                <span class="brand-name">VILLA DU CASSIER JAUNE</span>
-                <span class="brand-sub">MARTINIQUE</span>
+                <span class="brand-name">{{ i18n.t('brand.name') }}</span>
+                <span class="brand-sub">{{ i18n.t('brand.location') }}</span>
               </span>
             </a>
             <nav class="links">
-              <a routerLink="/" fragment="villa">La villa</a>
-              <a routerLink="/galerie">Photos</a>
-              <a routerLink="/" fragment="equipements">Équipements</a>
-              <a routerLink="/" fragment="tarifs">Tarifs</a>
-              <a routerLink="/devis">Demander un devis</a>
-              <a routerLink="/espace-client">Espace client</a>
+              <a routerLink="/" fragment="villa">{{ i18n.t('navigation.villa') }}</a>
+              <a routerLink="/galerie">{{ i18n.t('navigation.photos') }}</a>
+              <a routerLink="/" fragment="equipements">{{ i18n.t('navigation.amenities') }}</a>
+              <a routerLink="/" fragment="tarifs">{{ i18n.t('navigation.rates') }}</a>
+              <a routerLink="/devis">{{ i18n.t('navigation.requestQuote') }}</a>
+              <a routerLink="/espace-client">{{ i18n.t('navigation.customerArea') }}</a>
             </nav>
           </div>
           <div class="bottom">
-            <span>© 2025 Villa du Cassier Jaune – Tous droits réservés</span>
+            <span>{{ i18n.t('footer.home.copyright') }}</span>
             <span class="legal">
-              <a routerLink="/" fragment="top">Mentions légales</a>
-              <a routerLink="/" fragment="top">Confidentialité</a>
+              <a routerLink="/" fragment="top">{{ i18n.t('footer.legal') }}</a>
+              <a routerLink="/" fragment="top">{{ i18n.t('footer.privacy') }}</a>
             </span>
           </div>
         </div>
-      } @else if (variant() === "owner") {
+      } @else if (variant() === 'owner') {
         <div class="footer-box slim">
-          <span>© 2026 Villa du Cassier Jaune – Espace propriétaire</span>
+          <span>{{ i18n.t('footer.owner.copyright') }}</span>
           <span class="legal">
-            <a routerLink="/">Voir le site</a>
-            <a routerLink="/espace-client">Vue client</a>
+            <a routerLink="/">{{ i18n.t('navigation.viewSite') }}</a>
+            <a routerLink="/espace-client">{{ i18n.t('navigation.customerView') }}</a>
           </span>
         </div>
       } @else {
         <div class="footer-box slim">
-          <span>© 2026 Villa du Cassier Jaune – Tous droits réservés</span>
+          <span>{{ i18n.t('footer.compact.copyright') }}</span>
           <span class="legal">
-            <a routerLink="/">Retour à l'accueil</a>
-            <a routerLink="/devis">Demander un devis</a>
+            <a routerLink="/">{{ i18n.t('navigation.backHome') }}</a>
+            <a routerLink="/devis">{{ i18n.t('navigation.requestQuote') }}</a>
           </span>
         </div>
       }
@@ -167,14 +168,15 @@ type FooterVariant = "home" | "compact" | "owner"
   `,
 })
 export class SiteFooter {
-  readonly #router = inject(Router)
-  readonly path = signal(this.#router.url)
+  readonly i18n = inject(Internationalization);
+  readonly #router = inject(Router);
+  readonly path = signal(this.#router.url);
 
   readonly variant = computed<FooterVariant>(() => {
-    const p = this.path().split("?")[0]!.split("#")[0]!
-    if (p.startsWith("/proprietaire")) return "owner"
-    return p === "/" || p === "" ? "home" : "compact"
-  })
+    const p = this.path().split('?')[0]!.split('#')[0]!;
+    if (p.startsWith('/proprietaire')) return 'owner';
+    return p === '/' || p === '' ? 'home' : 'compact';
+  });
 
   constructor() {
     this.#router.events
@@ -182,6 +184,6 @@ export class SiteFooter {
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe((event) => this.path.set(event.urlAfterRedirects))
+      .subscribe((event) => this.path.set(event.urlAfterRedirects));
   }
 }

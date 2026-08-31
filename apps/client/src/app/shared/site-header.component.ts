@@ -1,10 +1,11 @@
-import { Component, computed, inject, signal } from "@angular/core"
-import { NavigationEnd, Router, RouterLink } from "@angular/router"
-import { takeUntilDestroyed } from "@angular/core/rxjs-interop"
-import { filter } from "rxjs"
-import { Auth } from "../core/auth.service"
+import { Component, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { filter } from 'rxjs';
+import { Auth } from '../core/auth.service';
+import { Internationalization } from '../core/internationalization';
 
-type HeaderVariant = "overlay" | "solid" | "owner"
+type HeaderVariant = 'overlay' | 'solid' | 'owner';
 
 /**
  * The site header, straight from the design: transparent and laid over the
@@ -12,7 +13,7 @@ type HeaderVariant = "overlay" | "solid" | "owner"
  * dedicated owner variant for the admin area.
  */
 @Component({
-  selector: "app-site-header",
+  selector: 'app-site-header',
   imports: [RouterLink],
   template: `
     <header class="site-header" [class.overlay]="variant() === 'overlay'">
@@ -20,39 +21,67 @@ type HeaderVariant = "overlay" | "solid" | "owner"
         <a routerLink="/" class="brand">
           <img src="logo.png" alt="" />
           <span class="brand-text">
-            <span class="brand-name">VILLA DU CASSIER JAUNE</span>
-            <span class="brand-sub">{{ variant() === "owner" ? "ESPACE PROPRIÉTAIRE" : "MARTINIQUE" }}</span>
+            <span class="brand-name">{{ i18n.t('brand.name') }}</span>
+            <span class="brand-sub">{{
+              i18n.t(variant() === 'owner' ? 'brand.ownerArea' : 'brand.location')
+            }}</span>
           </span>
         </a>
 
-        @if (variant() === "owner") {
+        @if (variant() === 'owner') {
           <nav class="nav">
-            <a routerLink="/" class="nav-link">Voir le site</a>
-            <a routerLink="/espace-client" class="nav-link">Vue client</a>
-            <button type="button" class="btn-ghost nav-cta" (click)="signOut()">Déconnexion</button>
+            <a routerLink="/" class="nav-link">{{ i18n.t('navigation.viewSite') }}</a>
+            <a routerLink="/espace-client" class="nav-link">{{
+              i18n.t('navigation.customerView')
+            }}</a>
+            <button type="button" class="btn-ghost nav-cta" (click)="signOut()">
+              {{ i18n.t('navigation.signOut') }}
+            </button>
           </nav>
         } @else {
           <nav class="nav">
-            <a routerLink="/" fragment="villa" class="nav-link">La villa</a>
-            <a routerLink="/galerie" class="nav-link" [class.active]="active() === 'photos'">Photos</a>
-            @if (variant() === "overlay") {
-              <a routerLink="/" fragment="equipements" class="nav-link">Équipements</a>
+            <a routerLink="/" fragment="villa" class="nav-link">{{ i18n.t('navigation.villa') }}</a>
+            <a routerLink="/galerie" class="nav-link" [class.active]="active() === 'photos'">{{
+              i18n.t('navigation.photos')
+            }}</a>
+            @if (variant() === 'overlay') {
+              <a routerLink="/" fragment="equipements" class="nav-link">{{
+                i18n.t('navigation.amenities')
+              }}</a>
             }
-            <a routerLink="/" fragment="tarifs" class="nav-link">Tarifs</a>
-            <a routerLink="/" fragment="reservation" class="nav-link">Réservation</a>
+            <a routerLink="/" fragment="tarifs" class="nav-link">{{
+              i18n.t('navigation.rates')
+            }}</a>
+            <a routerLink="/" fragment="reservation" class="nav-link">{{
+              i18n.t('navigation.booking')
+            }}</a>
             @if (auth.signedIn()) {
-              <a routerLink="/espace-client" class="nav-link" [class.active]="active() === 'espace'">Mon espace</a>
+              <a
+                routerLink="/espace-client"
+                class="nav-link"
+                [class.active]="active() === 'espace'"
+                >{{ i18n.t('navigation.myArea') }}</a
+              >
               @if (auth.isOwner()) {
-                <a routerLink="/proprietaire/reservations" class="nav-link">Gestion</a>
+                <a routerLink="/proprietaire/reservations" class="nav-link">{{
+                  i18n.t('navigation.management')
+                }}</a>
               }
-              <button type="button" class="btn-ghost nav-cta" (click)="signOut()">Déconnexion</button>
+              <button type="button" class="btn-ghost nav-cta" (click)="signOut()">
+                {{ i18n.t('navigation.signOut') }}
+              </button>
             } @else {
-              <a routerLink="/connexion" class="nav-link" [class.active]="active() === 'connexion'">Connexion</a>
+              <a
+                routerLink="/connexion"
+                class="nav-link"
+                [class.active]="active() === 'connexion'"
+                >{{ i18n.t('navigation.signIn') }}</a
+              >
             }
-            @if (active() === "devis") {
-              <span class="nav-current">Demander un devis</span>
+            @if (active() === 'devis') {
+              <span class="nav-current">{{ i18n.t('navigation.requestQuote') }}</span>
             } @else {
-              <a routerLink="/devis" class="btn nav-cta">Demander un devis</a>
+              <a routerLink="/devis" class="btn nav-cta">{{ i18n.t('navigation.requestQuote') }}</a>
             }
           </nav>
         }
@@ -174,25 +203,26 @@ type HeaderVariant = "overlay" | "solid" | "owner"
   `,
 })
 export class SiteHeader {
-  readonly auth = inject(Auth)
-  readonly #router = inject(Router)
+  readonly auth = inject(Auth);
+  readonly i18n = inject(Internationalization);
+  readonly #router = inject(Router);
 
-  readonly path = signal(this.#router.url)
+  readonly path = signal(this.#router.url);
 
   readonly variant = computed<HeaderVariant>(() => {
-    const p = this.path().split("?")[0]!.split("#")[0]!
-    if (p.startsWith("/proprietaire")) return "owner"
-    return p === "/" || p === "" ? "overlay" : "solid"
-  })
+    const p = this.path().split('?')[0]!.split('#')[0]!;
+    if (p.startsWith('/proprietaire')) return 'owner';
+    return p === '/' || p === '' ? 'overlay' : 'solid';
+  });
 
   readonly active = computed(() => {
-    const p = this.path().split("?")[0]!.split("#")[0]!
-    if (p.startsWith("/galerie")) return "photos"
-    if (p.startsWith("/connexion") || p.startsWith("/inscription")) return "connexion"
-    if (p.startsWith("/espace-client")) return "espace"
-    if (p.startsWith("/devis")) return "devis"
-    return ""
-  })
+    const p = this.path().split('?')[0]!.split('#')[0]!;
+    if (p.startsWith('/galerie')) return 'photos';
+    if (p.startsWith('/connexion') || p.startsWith('/inscription')) return 'connexion';
+    if (p.startsWith('/espace-client')) return 'espace';
+    if (p.startsWith('/devis')) return 'devis';
+    return '';
+  });
 
   constructor() {
     this.#router.events
@@ -200,11 +230,11 @@ export class SiteHeader {
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe((event) => this.path.set(event.urlAfterRedirects))
+      .subscribe((event) => this.path.set(event.urlAfterRedirects));
   }
 
   async signOut(): Promise<void> {
-    await this.auth.signOut()
-    await this.#router.navigate(["/"])
+    await this.auth.signOut();
+    await this.#router.navigate(['/']);
   }
 }

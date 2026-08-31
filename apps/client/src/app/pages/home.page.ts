@@ -1,44 +1,46 @@
-import { Component, inject, signal } from "@angular/core"
-import { Router, RouterLink } from "@angular/router"
-import { nightsBetween, stayQueryParams } from "../core/form-state"
-import { QuoteFunnelStore } from "../core/quote-funnel.store"
-import { WEEKLY_BASE } from "../shared/estimate"
+import { Component, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { nightsBetween, stayQueryParams } from '../core/form-state';
+import { Internationalization } from '../core/internationalization';
+import { QuoteFunnelStore } from '../core/quote-funnel.store';
+import { WEEKLY_BASE } from '../shared/estimate';
 
 interface DispoMessage {
-  readonly text: string
-  readonly ok: boolean
+  readonly text: string;
+  readonly ok: boolean;
 }
 
 interface PriceCard {
-  readonly icon: "tag" | "percent" | "spray" | "shield"
-  readonly top?: string
-  readonly big: string
-  readonly sub?: string
+  readonly icon: 'tag' | 'percent' | 'spray' | 'shield';
+  readonly top?: string;
+  readonly big: string;
+  readonly sub?: string;
 }
 
 interface Step {
-  readonly icon: "user" | "calendar" | "document" | "check"
-  readonly text: string
+  readonly icon: 'user' | 'calendar' | 'document' | 'check';
+  readonly text: string;
 }
 
 /** The marketing home: hero, availability search, villa, rates, booking flow. */
 @Component({
-  selector: "app-home",
+  selector: 'app-home',
   imports: [RouterLink],
   template: `
     <section class="hero">
       <div class="hero-bg"></div>
       <div class="hero-gradient"></div>
       <div class="container hero-content" id="top">
-        <div class="hero-kicker">MARTINIQUE</div>
-        <h1 class="hero-title">Une villa de caractère<br />pour vos séjours en Martinique</h1>
-        <p class="hero-text">
-          Villa de plain-pied avec piscine privée et quatre chambres climatisées.
-          Jusqu'à 8 voyageurs, de mars à décembre.
-        </p>
+        <div class="hero-kicker">{{ i18n.t('brand.location') }}</div>
+        <h1 class="hero-title">
+          {{ i18n.t('home.hero.title.line1') }}<br />{{ i18n.t('home.hero.title.line2') }}
+        </h1>
+        <p class="hero-text">{{ i18n.t('home.hero.description') }}</p>
         <div class="hero-ctas">
-          <a routerLink="/devis" class="btn btn-lg">Demander un devis</a>
-          <a routerLink="/" fragment="villa" class="hero-link">Découvrir la villa</a>
+          <a routerLink="/devis" class="btn btn-lg">{{ i18n.t('navigation.requestQuote') }}</a>
+          <a routerLink="/" fragment="villa" class="hero-link">{{
+            i18n.t('home.hero.discover')
+          }}</a>
         </div>
       </div>
     </section>
@@ -46,9 +48,15 @@ interface Step {
     <section class="container search-wrap">
       <div class="search-card">
         <label class="search-field">
-          <span class="search-label">Arrivée</span>
+          <span class="search-label">{{ i18n.t('fields.arrival') }}</span>
           <span class="search-input-wrap">
-            <svg viewBox="0 0 20 20" class="input-icon" fill="none" stroke="#8B9A92" stroke-width="1.4">
+            <svg
+              viewBox="0 0 20 20"
+              class="input-icon"
+              fill="none"
+              stroke="#8B9A92"
+              stroke-width="1.4"
+            >
               <rect x="2.5" y="4" width="15" height="13" rx="1.6"></rect>
               <path d="M2.5 8h15M6.5 2.5v3M13.5 2.5v3"></path>
             </svg>
@@ -56,9 +64,15 @@ interface Step {
           </span>
         </label>
         <label class="search-field">
-          <span class="search-label">Départ</span>
+          <span class="search-label">{{ i18n.t('fields.departure') }}</span>
           <span class="search-input-wrap">
-            <svg viewBox="0 0 20 20" class="input-icon" fill="none" stroke="#8B9A92" stroke-width="1.4">
+            <svg
+              viewBox="0 0 20 20"
+              class="input-icon"
+              fill="none"
+              stroke="#8B9A92"
+              stroke-width="1.4"
+            >
               <rect x="2.5" y="4" width="15" height="13" rx="1.6"></rect>
               <path d="M2.5 8h15M6.5 2.5v3M13.5 2.5v3"></path>
             </svg>
@@ -66,24 +80,36 @@ interface Step {
           </span>
         </label>
         <label class="search-field">
-          <span class="search-label">Voyageurs</span>
+          <span class="search-label">{{ i18n.t('fields.travelers') }}</span>
           <span class="search-input-wrap">
-            <svg viewBox="0 0 20 20" class="input-icon" fill="none" stroke="#8B9A92" stroke-width="1.4">
+            <svg
+              viewBox="0 0 20 20"
+              class="input-icon"
+              fill="none"
+              stroke="#8B9A92"
+              stroke-width="1.4"
+            >
               <circle cx="10" cy="7" r="3"></circle>
               <path d="M4.5 17c0-3 2.5-5 5.5-5s5.5 2 5.5 5"></path>
             </svg>
             <select [value]="voyageurs()" (change)="onVoyageurs($event)">
               @for (n of [2, 3, 4, 5, 6, 7, 8]; track n) {
-                <option [value]="n">{{ n }} voyageurs</option>
+                <option [value]="n">{{ i18n.plural('common.travelers', n) }}</option>
               }
             </select>
-            <svg viewBox="0 0 20 20" class="select-caret" fill="none" stroke="#55665E" stroke-width="1.4">
+            <svg
+              viewBox="0 0 20 20"
+              class="select-caret"
+              fill="none"
+              stroke="#55665E"
+              stroke-width="1.4"
+            >
               <path d="M5 8l5 5 5-5"></path>
             </svg>
           </span>
         </label>
         <button type="button" class="btn btn-md search-button" (click)="allerAuDevis()">
-          Vérifier les disponibilités
+          {{ i18n.t('home.search.submit') }}
         </button>
       </div>
       <div class="dispo-slot">
@@ -102,28 +128,32 @@ interface Step {
             <circle cx="17" cy="9" r="2.4"></circle>
             <path d="M16 14.4c2.9 0 5 2.3 5 5.6"></path>
           </svg>
-          <span>8 voyageurs</span>
+          <span>{{ i18n.plural('common.travelers', 8) }}</span>
         </div>
         <div class="feature">
           <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
             <path d="M2.5 18v-6.5h19V18M2.5 14.5h19M6 11.5V8h12v3.5M2.5 18v2M21.5 18v2"></path>
           </svg>
-          <span>4 chambres</span>
+          <span>{{ i18n.t('home.features.bedrooms') }}</span>
         </div>
         <div class="feature">
           <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
             <path d="M8 13V5h8M8 9h8"></path>
-            <path d="M2 16c1.6 0 1.6 1.4 3.3 1.4S6.9 16 8.5 16s1.6 1.4 3.3 1.4S13.4 16 15 16s1.6 1.4 3.3 1.4S19.9 16 21.5 16"></path>
-            <path d="M2 20c1.6 0 1.6 1.4 3.3 1.4S6.9 20 8.5 20s1.6 1.4 3.3 1.4S13.4 20 15 20s1.6 1.4 3.3 1.4S19.9 20 21.5 20"></path>
+            <path
+              d="M2 16c1.6 0 1.6 1.4 3.3 1.4S6.9 16 8.5 16s1.6 1.4 3.3 1.4S13.4 16 15 16s1.6 1.4 3.3 1.4S19.9 16 21.5 16"
+            ></path>
+            <path
+              d="M2 20c1.6 0 1.6 1.4 3.3 1.4S6.9 20 8.5 20s1.6 1.4 3.3 1.4S13.4 20 15 20s1.6 1.4 3.3 1.4S19.9 20 21.5 20"
+            ></path>
           </svg>
-          <span>Piscine privée</span>
+          <span>{{ i18n.t('home.features.pool') }}</span>
         </div>
         <div class="feature">
           <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
             <path d="M4 20c0-8 6-14 16-14 0 10-6 14-12 14H4z"></path>
             <path d="M6 18c3-4 7-7 11-8"></path>
           </svg>
-          <span>Jardin clos</span>
+          <span>{{ i18n.t('home.features.garden') }}</span>
         </div>
         <div class="feature">
           <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
@@ -132,7 +162,7 @@ interface Step {
             <circle cx="7.5" cy="14.6" r="0.9"></circle>
             <circle cx="16.5" cy="14.6" r="0.9"></circle>
           </svg>
-          <span>Parking privé</span>
+          <span>{{ i18n.t('home.features.parking') }}</span>
         </div>
       </div>
     </section>
@@ -140,41 +170,53 @@ interface Step {
     <section id="villa" class="container villa-section">
       <div class="villa-box">
         <div class="villa-text">
-          <h2 class="villa-title">Le confort d'une maison,<br />au calme sous les tropiques</h2>
-          <p class="villa-paragraph">
-            Pensée pour les séjours en famille ou entre amis, la villa réunit quatre chambres climatisées,
-            de beaux espaces extérieurs et une piscine privée au cœur d'un jardin clos.
-          </p>
+          <h2 class="villa-title">
+            {{ i18n.t('home.villa.title.line1') }}<br />{{ i18n.t('home.villa.title.line2') }}
+          </h2>
+          <p class="villa-paragraph">{{ i18n.t('home.villa.description') }}</p>
           <a routerLink="/galerie" class="villa-link">
-            Voir toutes les photos
-            <svg viewBox="0 0 30 12" width="30" height="12" fill="none" stroke="currentColor" stroke-width="1.3">
+            {{ i18n.t('home.villa.allPhotos') }}
+            <svg
+              viewBox="0 0 30 12"
+              width="30"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.3"
+            >
               <path d="M0 6h27M22 1.5L27 6l-5 4.5"></path>
             </svg>
           </a>
         </div>
         <div class="villa-images">
-          <img src="images/piscine-carbet.jpg" alt="Piscine privée et carbet" class="img-tall" />
-          <img src="images/terrasse-couverte.jpg" alt="Terrasse couverte et hamac" />
-          <img src="images/chambre-1.jpg" alt="Chambre climatisée" />
+          <img
+            src="images/piscine-carbet.jpg"
+            [alt]="i18n.t('home.villa.images.pool')"
+            class="img-tall"
+          />
+          <img src="images/terrasse-couverte.jpg" [alt]="i18n.t('home.villa.images.terrace')" />
+          <img src="images/chambre-1.jpg" [alt]="i18n.t('home.villa.images.bedroom')" />
         </div>
       </div>
     </section>
 
     <section id="tarifs" class="container rates-section">
       <div class="rates-box">
-        <h2 class="rates-title">Préparez<br />votre séjour</h2>
+        <h2 class="rates-title">
+          {{ i18n.t('home.rates.title.line1') }}<br />{{ i18n.t('home.rates.title.line2') }}
+        </h2>
         <div class="rates-content">
           <div class="rates-grid">
-            @for (card of priceCards; track card.big + (card.top ?? "")) {
+            @for (card of priceCards; track card.big + (card.top ?? '')) {
               <div class="rate-card">
                 @switch (card.icon) {
-                  @case ("tag") {
+                  @case ('tag') {
                     <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
                       <path d="M12.6 2.5H21v8.4L10.5 21.4 2.6 13.5z"></path>
                       <circle cx="17" cy="7" r="1.4"></circle>
                     </svg>
                   }
-                  @case ("percent") {
+                  @case ('percent') {
                     <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
                       <circle cx="12" cy="12" r="9.3"></circle>
                       <path d="M8.5 15.5l7-7"></path>
@@ -182,16 +224,18 @@ interface Step {
                       <circle cx="15" cy="14.8" r="1.3"></circle>
                     </svg>
                   }
-                  @case ("spray") {
+                  @case ('spray') {
                     <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
                       <path d="M9 3.5h4.5V7H9z"></path>
                       <path d="M6.5 7h9.5v13.5h-9.5z"></path>
                       <path d="M18 5.5c1.6 0 2.6 1 2.6 2.6V11"></path>
                     </svg>
                   }
-                  @case ("shield") {
+                  @case ('shield') {
                     <svg viewBox="0 0 24 24" fill="none" stroke="#1E4436" stroke-width="1.3">
-                      <path d="M12 2.6l7.5 2.8v6c0 4.4-3.1 8.2-7.5 10-4.4-1.8-7.5-5.6-7.5-10v-6z"></path>
+                      <path
+                        d="M12 2.6l7.5 2.8v6c0 4.4-3.1 8.2-7.5 10-4.4-1.8-7.5-5.6-7.5-10v-6z"
+                      ></path>
                       <path d="M8.8 12l2.4 2.4 4-4.4"></path>
                     </svg>
                   }
@@ -209,8 +253,8 @@ interface Step {
             }
           </div>
           <div class="rates-footer">
-            <p>Le tarif exact dépend des dates et de la durée du séjour. Les taxes touristiques sont calculées dans votre devis.</p>
-            <a routerLink="/devis" class="btn btn-md">Calculer mon devis</a>
+            <p>{{ i18n.t('home.rates.note') }}</p>
+            <a routerLink="/devis" class="btn btn-md">{{ i18n.t('home.rates.calculate') }}</a>
           </div>
         </div>
       </div>
@@ -218,7 +262,7 @@ interface Step {
 
     <section id="reservation" class="container steps-section">
       <div class="steps-grid">
-        <h2 class="steps-title">Une réservation simple, suivie personnellement</h2>
+        <h2 class="steps-title">{{ i18n.t('home.steps.title') }}</h2>
         <div class="steps-list">
           @for (step of steps; track step.text; let i = $index; let last = $last) {
             <div class="step">
@@ -227,25 +271,25 @@ interface Step {
                 <span class="step-line"></span>
               }
               @switch (step.icon) {
-                @case ("user") {
+                @case ('user') {
                   <svg viewBox="0 0 32 32" fill="none" stroke="#1E4436" stroke-width="1.2">
                     <circle cx="16" cy="11" r="4.6"></circle>
                     <path d="M6.5 27c0-4.7 4.2-8.4 9.5-8.4s9.5 3.7 9.5 8.4"></path>
                   </svg>
                 }
-                @case ("calendar") {
+                @case ('calendar') {
                   <svg viewBox="0 0 32 32" fill="none" stroke="#1E4436" stroke-width="1.2">
                     <rect x="4.5" y="7" width="23" height="20" rx="2"></rect>
                     <path d="M4.5 13h23M10.5 4v5M21.5 4v5"></path>
                   </svg>
                 }
-                @case ("document") {
+                @case ('document') {
                   <svg viewBox="0 0 32 32" fill="none" stroke="#1E4436" stroke-width="1.2">
                     <path d="M8 4h11l5 5v19H8z"></path>
                     <path d="M12 14h8M12 18.5h8M12 23h5"></path>
                   </svg>
                 }
-                @case ("check") {
+                @case ('check') {
                   <svg viewBox="0 0 32 32" fill="none" stroke="#1E4436" stroke-width="1.2">
                     <circle cx="16" cy="16" r="12"></circle>
                     <path d="M10.5 16.4l4 4 7.5-8"></path>
@@ -261,56 +305,88 @@ interface Step {
 
     <section id="espace" class="container teaser-section">
       <div class="teaser-box">
-        <h2 class="teaser-title">Votre réservation, au même endroit</h2>
+        <h2 class="teaser-title">{{ i18n.t('home.teaser.title') }}</h2>
         <div class="teaser-card">
           <div class="teaser-cell">
-            <span class="teaser-label">Prochain séjour</span>
+            <span class="teaser-label">{{ i18n.t('home.teaser.nextStay') }}</span>
             <div class="teaser-stay">
-              <img src="images/kiosque.jpg" alt="Terrasse de la villa" />
+              <img src="images/kiosque.jpg" [alt]="i18n.t('home.teaser.imageAlt')" />
               <div class="teaser-stay-text">
-                <span class="teaser-stay-dates">12 juin 2025 – 19 juin 2025</span>
-                <span class="teaser-stay-meta">7 nuits · 6 voyageurs</span>
-                <span class="teaser-stay-meta">Villa du Cassier Jaune</span>
-                <a routerLink="/espace-client" class="teaser-link">Voir les détails</a>
+                <span class="teaser-stay-dates">{{ i18n.t('home.teaser.exampleDates') }}</span>
+                <span class="teaser-stay-meta">{{ i18n.t('home.teaser.exampleGuests') }}</span>
+                <span class="teaser-stay-meta">{{ i18n.t('brand.villaName') }}</span>
+                <a routerLink="/espace-client" class="teaser-link">{{
+                  i18n.t('home.teaser.details')
+                }}</a>
               </div>
             </div>
           </div>
           <div class="teaser-cell bordered">
-            <span class="teaser-label">Récapitulatif</span>
+            <span class="teaser-label">{{ i18n.t('home.teaser.summary') }}</span>
             <div class="teaser-row">
-              <span class="teaser-key">Statut</span>
-              <span class="badge" style="background: #EAF0EA; color: #1E4436;">Devis disponible</span>
+              <span class="teaser-key">{{ i18n.t('home.teaser.status') }}</span>
+              <span class="badge" style="background: #EAF0EA; color: #1E4436;">{{
+                i18n.t('home.teaser.quoteAvailable')
+              }}</span>
             </div>
             <div class="teaser-row">
-              <span class="teaser-key">Total estimé</span>
-              <span class="teaser-value">1 680 €</span>
+              <span class="teaser-key">{{ i18n.t('quotation.estimate.total') }}</span>
+              <span class="teaser-value">{{ i18n.euros(1680) }}</span>
             </div>
             <a routerLink="/devis" class="teaser-download">
-              Télécharger le devis
-              <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4">
+              {{ i18n.t('home.teaser.downloadQuote') }}
+              <svg
+                viewBox="0 0 18 18"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              >
                 <path d="M9 2.5v9M5.5 8.5L9 12l3.5-3.5M3 15h12"></path>
               </svg>
             </a>
           </div>
           <div class="teaser-cell bordered">
-            <span class="teaser-label">Documents</span>
+            <span class="teaser-label">{{ i18n.t('customer.tabs.documents') }}</span>
             <div class="teaser-row">
-              <span class="teaser-doc">Devis</span>
-              <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="#55665E" stroke-width="1.4">
+              <span class="teaser-doc">{{ i18n.t('customer.documents.quote.badge') }}</span>
+              <svg
+                viewBox="0 0 18 18"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="#55665E"
+                stroke-width="1.4"
+              >
                 <path d="M9 2.5v9M5.5 8.5L9 12l3.5-3.5M3 15h12"></path>
               </svg>
             </div>
             <div class="teaser-row">
-              <span class="teaser-doc">Devis signé</span>
-              <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="#55665E" stroke-width="1.4">
+              <span class="teaser-doc">{{ i18n.t('booking.status.signed.label') }}</span>
+              <svg
+                viewBox="0 0 18 18"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="#55665E"
+                stroke-width="1.4"
+              >
                 <path d="M9 2.5v9M5.5 8.5L9 12l3.5-3.5M3 15h12"></path>
               </svg>
             </div>
             <a routerLink="/espace-client" class="teaser-upload">
-              <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4">
+              <svg
+                viewBox="0 0 18 18"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+              >
                 <path d="M9 12.5v-9M5.5 6.5L9 3l3.5 3.5M3 15h12"></path>
               </svg>
-              Téléverser le devis signé
+              {{ i18n.t('home.teaser.uploadSignedQuote') }}
             </a>
           </div>
         </div>
@@ -323,10 +399,10 @@ interface Step {
         <div class="cta-gradient"></div>
         <div class="cta-content">
           <div class="cta-text">
-            <h2>Préparez votre séjour en Martinique</h2>
-            <p>Choisissez vos dates pour recevoir un devis détaillé.</p>
+            <h2>{{ i18n.t('home.cta.title') }}</h2>
+            <p>{{ i18n.t('home.cta.description') }}</p>
           </div>
-          <a routerLink="/devis" class="btn btn-lg">Demander un devis</a>
+          <a routerLink="/devis" class="btn btn-lg">{{ i18n.t('navigation.requestQuote') }}</a>
         </div>
       </div>
     </section>
@@ -343,7 +419,7 @@ interface Step {
       inset: 0;
     }
     .hero-bg {
-      background-image: url("/images/vue-globale.jpg");
+      background-image: url('/images/vue-globale.jpg');
       background-size: cover;
       background-position: center;
     }
@@ -912,41 +988,55 @@ interface Step {
   `,
 })
 export class HomePage {
-  readonly #router = inject(Router)
-  readonly #funnel = inject(QuoteFunnelStore)
+  readonly i18n = inject(Internationalization);
+  readonly #router = inject(Router);
+  readonly #funnel = inject(QuoteFunnelStore);
 
-  readonly arrivee = signal("")
-  readonly depart = signal("")
-  readonly voyageurs = signal("2")
-  readonly dispo = signal<DispoMessage | null>(null)
+  readonly arrivee = signal('');
+  readonly depart = signal('');
+  readonly voyageurs = signal('2');
+  readonly dispo = signal<DispoMessage | null>(null);
 
   readonly priceCards: PriceCard[] = [
-    { icon: "tag", top: "À partir de", big: `${WEEKLY_BASE.toLocaleString("fr-FR")} €`, sub: "la semaine" },
-    { icon: "percent", big: "10 %", sub: "de remise dès 8 nuits" },
-    { icon: "percent", big: "15 %", sub: "de remise dès 15 nuits" },
-    { icon: "spray", top: "Ménage obligatoire :", big: "200 €" },
-    { icon: "shield", top: "Caution :", big: "2 000 €" },
-  ]
+    {
+      icon: 'tag',
+      top: this.i18n.t('home.rates.from'),
+      big: this.i18n.euros(WEEKLY_BASE),
+      sub: this.i18n.t('home.rates.week'),
+    },
+    {
+      icon: 'percent',
+      big: this.i18n.number(0.1, { style: 'percent' }),
+      sub: this.i18n.t('home.rates.discount8'),
+    },
+    {
+      icon: 'percent',
+      big: this.i18n.number(0.15, { style: 'percent' }),
+      sub: this.i18n.t('home.rates.discount15'),
+    },
+    { icon: 'spray', top: this.i18n.t('home.rates.cleaning'), big: this.i18n.euros(200) },
+    { icon: 'shield', top: this.i18n.t('home.rates.deposit'), big: this.i18n.euros(2000) },
+  ];
 
   readonly steps: Step[] = [
-    { icon: "user", text: "Créez votre compte" },
-    { icon: "calendar", text: "Choisissez vos dates" },
-    { icon: "document", text: "Recevez et signez votre devis" },
-    { icon: "check", text: "Le propriétaire valide votre réservation" },
-  ]
+    { icon: 'user', text: this.i18n.t('home.steps.account') },
+    { icon: 'calendar', text: this.i18n.t('home.steps.dates') },
+    { icon: 'document', text: this.i18n.t('home.steps.quote') },
+    { icon: 'check', text: this.i18n.t('home.steps.validation') },
+  ];
 
   onArrivee(event: Event): void {
-    this.arrivee.set((event.target as HTMLInputElement).value)
-    this.dispo.set(null)
+    this.arrivee.set((event.target as HTMLInputElement).value);
+    this.dispo.set(null);
   }
 
   onDepart(event: Event): void {
-    this.depart.set((event.target as HTMLInputElement).value)
-    this.dispo.set(null)
+    this.depart.set((event.target as HTMLInputElement).value);
+    this.dispo.set(null);
   }
 
   onVoyageurs(event: Event): void {
-    this.voyageurs.set((event.target as HTMLSelectElement).value)
+    this.voyageurs.set((event.target as HTMLSelectElement).value);
   }
 
   /**
@@ -955,19 +1045,19 @@ export class HomePage {
    * per-session storage. Without both dates, ask inline — no dead ends.
    */
   allerAuDevis(): void {
-    const stay = { arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() }
-    if (stay.arrivee === "" || stay.depart === "") {
+    const stay = { arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() };
+    if (stay.arrivee === '' || stay.depart === '') {
       this.dispo.set({
-        text: "Indiquez une date d'arrivée et une date de départ pour vérifier les disponibilités.",
+        text: this.i18n.t('errors.home.datesRequired'),
         ok: false,
-      })
-      return
+      });
+      return;
     }
     if (nightsBetween(stay.arrivee, stay.depart) === 0) {
-      this.dispo.set({ text: "La date de départ doit être postérieure à la date d'arrivée.", ok: false })
-      return
+      this.dispo.set({ text: this.i18n.t('quotation.availability.invalid'), ok: false });
+      return;
     }
-    this.#funnel.setStay(stay)
-    void this.#router.navigate(["/devis"], { queryParams: stayQueryParams(stay) })
+    this.#funnel.setStay(stay);
+    void this.#router.navigate(['/devis'], { queryParams: stayQueryParams(stay) });
   }
 }

@@ -1,23 +1,24 @@
-import { Component, OnInit, inject, signal } from "@angular/core"
-import { ActivatedRoute, RouterLink } from "@angular/router"
-import { Auth } from "../core/auth.service"
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Auth } from '../core/auth.service';
+import { Internationalization } from '../core/internationalization';
 
 /** The verification link lands here with a token; it is POSTed immediately. */
 @Component({
-  selector: "app-verify-email",
+  selector: 'app-verify-email',
   imports: [RouterLink],
   template: `
     <section class="wrap">
       <div class="card">
-        <h1 class="title">Vérification de votre e-mail</h1>
-        @if (state() === "pending") {
-          <p class="intro">Vérification en cours…</p>
-        } @else if (state() === "ok") {
-          <p class="ok">Votre adresse e-mail est vérifiée.</p>
-          <a routerLink="/connexion" class="btn btn-md">Se connecter</a>
+        <h1 class="title">{{ i18n.t('verifyEmail.title') }}</h1>
+        @if (state() === 'pending') {
+          <p class="intro">{{ i18n.t('verifyEmail.pending') }}</p>
+        } @else if (state() === 'ok') {
+          <p class="ok">{{ i18n.t('verifyEmail.done') }}</p>
+          <a routerLink="/connexion" class="btn btn-md">{{ i18n.t('auth.signIn') }}</a>
         } @else {
-          <div class="box box-err error">Ce lien est invalide ou a expiré.</div>
-          <a routerLink="/connexion" class="btn btn-md">Retour à la connexion</a>
+          <div class="box box-err error">{{ i18n.t('errors.auth.invalidLink') }}</div>
+          <a routerLink="/connexion" class="btn btn-md">{{ i18n.t('auth.backToSignIn') }}</a>
         }
       </div>
     </section>
@@ -62,15 +63,16 @@ import { Auth } from "../core/auth.service"
   `,
 })
 export class VerifyEmailPage implements OnInit {
-  readonly #route = inject(ActivatedRoute)
-  readonly #auth = inject(Auth)
-  readonly state = signal<"pending" | "ok" | "failed">("pending")
+  readonly i18n = inject(Internationalization);
+  readonly #route = inject(ActivatedRoute);
+  readonly #auth = inject(Auth);
+  readonly state = signal<'pending' | 'ok' | 'failed'>('pending');
 
   ngOnInit(): void {
-    const token = this.#route.snapshot.queryParamMap.get("token") ?? ""
+    const token = this.#route.snapshot.queryParamMap.get('token') ?? '';
     this.#auth
       .verifyEmail(token)
-      .then(() => this.state.set("ok"))
-      .catch(() => this.state.set("failed"))
+      .then(() => this.state.set('ok'))
+      .catch(() => this.state.set('failed'));
   }
 }
