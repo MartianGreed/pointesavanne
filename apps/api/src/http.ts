@@ -7,6 +7,7 @@ import {
   Docs,
   Health,
   HttpCqrs,
+  UnauthorizedProblem,
   withDefaultErrors,
 } from "@structure-ai/http"
 import { HttpAuthorization } from "@structure-ai/authorization"
@@ -21,6 +22,7 @@ import {
   AppAuthTag,
   BookingRow,
   CheckAvailability,
+  ClaimQuotationLeads,
   FileStore,
   GetBooking,
   GetProfile,
@@ -29,6 +31,7 @@ import {
   RequestQuotation,
   SaveProfile,
   SignQuotation,
+  SubmitQuotationLead,
   ValidateQuotation,
   policy,
   resolvePrincipal,
@@ -58,6 +61,16 @@ const businessFailure = <A, I>(failure: Schema.Schema<A, I>): Schema.Schema<A, I
 
 const bookings = ApiGroup.make("bookings")
   .add(HttpCqrs.commandEndpoint("requestQuotation", "/bookings/quotation", RequestQuotation))
+  // The anonymous devis funnel: the lead is submitted without a session and
+  // claimed at sign-in (the claim's e-mail is derived from the session
+  // principal, never from a client payload).
+  .add(HttpCqrs.commandEndpoint("submitQuotationLead", "/bookings/leads", SubmitQuotationLead))
+  .add(
+    ApiEndpoint.post("claimQuotationLeads")`/bookings/leads/claim`
+      .addSuccess(ClaimQuotationLeads.success!)
+      .addError(businessFailure(ClaimQuotationLeads.failure!))
+      .pipe(withDefaultErrors),
+  )
   .add(HttpCqrs.queryEndpoint("listMyBookings", "/bookings/my", ListMyBookings))
   .add(HttpCqrs.queryEndpoint("listAllBookings", "/bookings", ListAllBookings))
   .add(HttpCqrs.queryEndpoint("checkAvailability", "/bookings/availability", CheckAvailability))
@@ -117,6 +130,25 @@ const base64 = (encoded: string): Uint8Array => new Uint8Array(Buffer.from(encod
 const BookingsLive = HttpApiBuilder.group(appApi, "bookings", (handlers) =>
   handlers
     .handle("requestQuotation", HttpCqrs.command(RequestQuotation))
+    .handle("submitQuotationLead", HttpCqrs.command(SubmitQuotationLead))
+    .handle("claimQuotationLeads", ({ request }) =>
+      Effect.gen(function* () {
+        // The acting principal's e-mail identifies the lead to claim; it is
+        // server-derived from the session, so a client cannot claim someone
+        // else's pending lead.
+        const user = Option.getOrUndefined(yield* Principal.current)
+        const email = user?.attributes?.email
+        if (typeof email !== "string" || email === "") {
+          return yield* Effect.fail(
+            new UnauthorizedProblem({
+              error: "Unauthenticated",
+              message: "a signed-in session is required to claim a quotation lead",
+            }),
+          )
+        }
+        return yield* HttpCqrs.command(ClaimQuotationLeads)({ payload: { email }, request })
+      }),
+    )
     .handle("listMyBookings", HttpCqrs.query(ListMyBookings))
     .handle("listAllBookings", HttpCqrs.query(ListAllBookings))
     .handle("checkAvailability", HttpCqrs.query(CheckAvailability))

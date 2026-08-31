@@ -1,17 +1,20 @@
-import { AggregateStore, EventDecodeError } from "@structure-ai/eventsourcing"
+import { AggregateStore, EventDecodeError, type EventStore } from "@structure-ai/eventsourcing"
 import { SqlError } from "@effect/sql/SqlError"
+import type * as SqlClient from "@effect/sql/SqlClient"
 import { CommandHandler, HandlerRegistry, QueryHandler } from "@structure-ai/cqrs"
-import { NotFound, ValidationFailed } from "@structure-ai/domain"
+import { ConcurrencyConflict, EntityId, InvariantViolation, NotFound, ValidationFailed } from "@structure-ai/domain"
 import { Effect, Option } from "effect"
-import { Booking, BookingId } from "./booking/booking.ts"
+import { Booking, BookingId, type BookingStatus, type PricingSnapshot } from "./booking/booking.ts"
 import { dates } from "./booking/pricing.ts"
 import { VillaCatalog } from "./catalog.ts"
 import { CustomerId, CustomerProfile } from "./customer/profile.ts"
-import { bookingRegistry, profileRegistry } from "./events.ts"
+import { bookingRegistry, leadRegistry, profileRegistry } from "./events.ts"
 import { FileNotFound, FileStore, QuotationPdf, quotationPath } from "./infra.ts"
 import { ViewModel, ViewStore } from "@structure-ai/viewmodel"
+import { QuotationLead, leadIdOf } from "./lead/lead.ts"
 import {
   CheckAvailability,
+  ClaimQuotationLeads,
   GenerateQuotation,
   GetBooking,
   GetProfile,
@@ -20,6 +23,7 @@ import {
   RequestQuotation,
   SaveProfile,
   SignQuotation,
+  SubmitQuotationLead,
   ValidateQuotation,
   type BookingRowType,
 } from "./messages/index.ts"
@@ -48,6 +52,81 @@ const dieInfra = <A, E, R>(
 /** Narrows the post-command status; "none" cannot follow an accepted command. */
 const narrowedStatus = <S extends string>(status: S | "none", fallback: S): S =>
   status === "none" ? fallback : status
+
+/** A stay a customer (or a claimed lead) asked a quotation for. */
+interface QuotationRequestInput {
+  readonly villaId: string
+  readonly from: string
+  readonly to: string
+  readonly adultsCount: number
+  readonly childrenCount: number
+  readonly message?: string
+}
+
+interface QuotationResult {
+  readonly bookingId: string
+  readonly status: BookingStatus
+  readonly pricing: PricingSnapshot
+}
+
+interface DispatchIds {
+  readonly correlationId?: string
+  readonly causationId?: string
+  /** Pre-generated id — the claim flow reserves it on the lead first. */
+  readonly bookingId?: EntityId.Of<typeof BookingId>
+}
+
+/**
+ * The booking-request orchestration shared by the signed-in request and the
+ * lead claim: catalog lookup, availability check against the (eventually
+ * consistent) view — the classic read-side race is accepted and documented;
+ * a double-booking is resolved by the owner during validation — then one
+ * aggregate transaction.
+ */
+const requestBooking = (
+  actor: string,
+  payload: QuotationRequestInput,
+  ids: DispatchIds,
+): Effect.Effect<QuotationResult, NotFound | ValidationFailed | InvariantViolation | ConcurrencyConflict, VillaCatalog | EventStore | SqlClient.SqlClient> =>
+  Effect.gen(function* () {
+    const catalog = yield* VillaCatalog
+    const villa = yield* catalog.find(payload.villaId)
+
+    const available = yield* dieInfra(isVillaAvailable(payload.villaId, payload.from, payload.to))
+    if (!available) {
+      return yield* new ValidationFailed({
+        subject: "booking",
+        issues: [
+          `Booking is unavailable for dates ${dates.format(dates.parse(payload.from))} - ${dates.format(dates.parse(payload.to))}`,
+        ],
+      })
+    }
+
+    const store = yield* AggregateStore.make(Booking, bookingRegistry)
+    const id = ids.bookingId ?? BookingId.generate()
+    const result = yield* dieInfra(
+      store.executeWithRetry(
+        id,
+        {
+          _tag: "RequestBooking",
+          id,
+          customerId: actor,
+          villa,
+          from: payload.from,
+          to: payload.to,
+          adultsCount: payload.adultsCount,
+          childrenCount: payload.childrenCount,
+          ...(payload.message !== undefined && payload.message !== "" ? { message: payload.message } : {}),
+        },
+        { correlationId: ids.correlationId, causationId: ids.causationId },
+      ),
+    )
+    const requested = result.events[0]
+    if (requested === undefined || requested._tag !== "BookingRequested") {
+      return yield* new ValidationFailed({ subject: "booking", issues: ["quotation request was not recorded"] })
+    }
+    return { bookingId: id, status: narrowedStatus(result.state.status, "quotation-requested"), pricing: requested.pricing }
+  })
 
 type BookingRow = ViewModel.Of<typeof BookingView>
 
@@ -80,47 +159,130 @@ export const handlers = HandlerRegistry.layer(
       if (actor === undefined) {
         return yield* new ValidationFailed({ subject: "request", issues: ["a signed-in customer is required"] })
       }
+      return yield* requestBooking(actor, payload, {
+        correlationId: dispatch.correlationId,
+        causationId: dispatch.messageId,
+      })
+    }),
+  ),
 
-      const catalog = yield* VillaCatalog
-      const villa = yield* catalog.find(payload.villaId)
+  // --- quotation leads --------------------------------------------------------
 
-      // Availability is checked against the (eventually consistent) booking
-      // view before the aggregate decides — the classic read-side race is
-      // accepted and documented; a double-booking is resolved by the owner
-      // during validation.
-      const available = yield* dieInfra(isVillaAvailable(payload.villaId, payload.from, payload.to))
-      if (!available) {
-        return yield* new ValidationFailed({
-          subject: "booking",
-          issues: [
-            `Booking is unavailable for dates ${dates.format(dates.parse(payload.from))} - ${dates.format(dates.parse(payload.to))}`,
-          ],
-        })
-      }
-
-      const store = yield* AggregateStore.make(Booking, bookingRegistry)
-      const id = BookingId.generate()
+  CommandHandler.make(SubmitQuotationLead, (payload, dispatch) =>
+    Effect.gen(function* () {
+      const email = payload.email.trim().toLowerCase()
+      const store = yield* AggregateStore.make(QuotationLead, leadRegistry)
+      const id = leadIdOf(email)
       const result = yield* dieInfra(
         store.executeWithRetry(
           id,
           {
-            _tag: "RequestBooking",
+            _tag: "SubmitLead",
             id,
-            customerId: actor,
-            villa,
+            email,
+            firstname: payload.firstname.trim(),
+            lastname: payload.lastname.trim(),
+            phoneNumber: payload.phoneNumber.trim(),
+            villaId: payload.villaId,
             from: payload.from,
             to: payload.to,
             adultsCount: payload.adultsCount,
             childrenCount: payload.childrenCount,
+            ...(payload.message !== undefined && payload.message !== "" ? { message: payload.message } : {}),
           },
           { correlationId: dispatch.correlationId, causationId: dispatch.messageId },
         ),
       )
-      const requested = result.events[0]
-      if (requested === undefined || requested._tag !== "BookingRequested") {
-        return yield* new ValidationFailed({ subject: "booking", issues: ["quotation request was not recorded"] })
+      if (result.state.status !== "submitted") {
+        return yield* new ValidationFailed({ subject: "lead", issues: ["quotation lead was not recorded"] })
       }
-      return { bookingId: id, status: narrowedStatus(result.state.status, "quotation-requested"), pricing: requested.pricing }
+      return { leadId: id, status: "submitted" as const }
+    }),
+  ),
+
+  /**
+   * Converts the acting customer's pending lead into a profile (when none
+   * exists yet) and a quotation request. The e-mail arrives from the HTTP
+   * edge (derived from the session) — never trusted from a client payload.
+   * The lead is claimed *before* the booking is created so a concurrent
+   * claim is a no-op instead of a double booking; a booking that then fails
+   * (dates taken in the meantime, villa gone) is reported as an issue on a
+   * consumed lead rather than retried forever.
+   */
+  CommandHandler.make(ClaimQuotationLeads, (payload, dispatch) =>
+    Effect.gen(function* () {
+      const actor = dispatch.actor
+      if (actor === undefined) {
+        return yield* new ValidationFailed({ subject: "lead", issues: ["a signed-in customer is required"] })
+      }
+      const email = payload.email.trim().toLowerCase()
+      const leads = yield* AggregateStore.make(QuotationLead, leadRegistry)
+      const leadId = leadIdOf(email)
+      const { state: lead } = yield* dieInfra(leads.load(leadId))
+      if (lead.status !== "submitted") return { claimed: 0, bookings: [], issues: [] }
+
+      const bookingId = BookingId.generate()
+      const ids = { correlationId: dispatch.correlationId, causationId: dispatch.messageId }
+      const claimed = yield* dieInfra(
+        leads.executeWithRetry(leadId, { _tag: "ClaimLead", id: leadId, customerId: actor, bookingId }, ids),
+      ).pipe(Effect.catchTag("InvariantViolation", () => Effect.succeed(false)))
+      // A concurrent claim got there first — nothing left to convert.
+      if (claimed === false) return { claimed: 0, bookings: [], issues: [] }
+
+      const issues: string[] = []
+
+      // Fill an absent profile from the lead's contact details — a saved
+      // profile is authoritative and never overwritten by a lead.
+      const profile = yield* dieInfra(profileOf(actor))
+      if (!profile.saved) {
+        const profiles = yield* AggregateStore.make(CustomerProfile, profileRegistry)
+        const customerId = CustomerId.make(actor)
+        const saved = yield* dieInfra(
+          profiles.executeWithRetry(
+            customerId,
+            {
+              _tag: "SaveProfile",
+              id: customerId,
+              email: lead.email ?? email,
+              firstname: lead.firstname ?? "",
+              lastname: lead.lastname ?? "",
+              phoneNumber: lead.phoneNumber ?? "",
+            },
+            ids,
+          ),
+        ).pipe(
+          // The quotation must not die on a bad contact detail — report it.
+          Effect.catchTag("ValidationFailed", (failure) => Effect.succeed(failure)),
+        )
+        if ("_tag" in saved && saved._tag === "ValidationFailed") issues.push(...saved.issues)
+      }
+
+      const requested = yield* requestBooking(
+        actor,
+        {
+          villaId: lead.villaId ?? "",
+          from: lead.from ?? "",
+          to: lead.to ?? "",
+          adultsCount: lead.adultsCount ?? 1,
+          childrenCount: lead.childrenCount ?? 0,
+          ...(lead.message !== undefined && { message: lead.message }),
+        },
+        { ...ids, bookingId },
+      ).pipe(
+        Effect.catchTags({
+          ValidationFailed: (failure) => Effect.succeed(failure),
+          NotFound: (failure) =>
+            Effect.succeed(new ValidationFailed({ subject: "lead", issues: [`${failure.entity} ${failure.id} not found`] })),
+        }),
+      )
+      const bookings: QuotationResult[] = []
+      if ("bookingId" in requested) {
+        bookings.push(requested)
+      } else {
+        issues.push(...requested.issues)
+      }
+
+      return { claimed: 1, bookings, issues }
     }),
   ),
 

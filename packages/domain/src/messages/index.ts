@@ -11,6 +11,7 @@ import { bookingStatuses } from "../booking/booking.ts"
 const isoDay = Schema.String.pipe(Schema.pattern(/^\d{4}-\d{2}-\d{2}$/))
 const count = Schema.Number.pipe(Schema.int(), Schema.nonNegative())
 const money = Schema.Number.pipe(Schema.nonNegative())
+const emailShape = Schema.String.pipe(Schema.pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
 
 /** Every business failure a handler may report; infra defects die instead. */
 export const AppFailure = Schema.Union(
@@ -94,6 +95,7 @@ export const RequestQuotation = Command.define("RequestQuotation", {
     to: isoDay,
     adultsCount: count.pipe(Schema.positive()),
     childrenCount: Schema.optionalWith(count, { default: () => 0 }),
+    message: Schema.optional(Schema.String),
   }),
   success: Schema.Struct({
     bookingId: Schema.String,
@@ -122,6 +124,57 @@ export const ValidateQuotation = Command.define("ValidateQuotation", {
     reason: Schema.optional(Schema.String),
   }),
   success: Schema.Struct({ bookingId: Schema.String, status: Schema.Literal(...bookingStatuses) }),
+  failure: AppFailure,
+})
+
+// --- quotation leads --------------------------------------------------------
+
+/** The booking request a converted lead produced (same shape as RequestQuotation's success). */
+export const ClaimedBooking = Schema.Struct({
+  bookingId: Schema.String,
+  status: Schema.Literal(...bookingStatuses),
+  pricing: PricingSummary,
+})
+
+export const ClaimQuotationLeadsSuccess = Schema.Struct({
+  /** How many pending leads were converted (0 or 1 — one lead per e-mail). */
+  claimed: Schema.Number,
+  bookings: Schema.Array(ClaimedBooking),
+  /** Why a claimed lead produced no booking (e.g. dates since taken). */
+  issues: Schema.Array(Schema.String),
+})
+export type ClaimQuotationLeadsSuccessType = typeof ClaimQuotationLeadsSuccess.Type
+
+/**
+ * The anonymous funnel entry: a visitor asks for a devis before having an
+ * account. The lead is the backend's record of that intent — the claim,
+ * after sign-in, turns it into a real quotation request.
+ */
+export const SubmitQuotationLead = Command.define("SubmitQuotationLead", {
+  payload: Schema.Struct({
+    email: emailShape,
+    firstname: Schema.String,
+    lastname: Schema.String,
+    phoneNumber: Schema.String,
+    villaId: Schema.String,
+    from: isoDay,
+    to: isoDay,
+    adultsCount: count.pipe(Schema.positive()),
+    childrenCount: Schema.optionalWith(count, { default: () => 0 }),
+    message: Schema.optional(Schema.String),
+  }),
+  success: Schema.Struct({ leadId: Schema.String, status: Schema.Literal("submitted") }),
+  failure: AppFailure,
+})
+
+/**
+ * Converts the pending lead of the acting customer's e-mail into a saved
+ * profile (when absent) and a quotation request. The e-mail is derived from
+ * the session at the HTTP edge — the client never supplies it.
+ */
+export const ClaimQuotationLeads = Command.define("ClaimQuotationLeads", {
+  payload: Schema.Struct({ email: emailShape }),
+  success: ClaimQuotationLeadsSuccess,
   failure: AppFailure,
 })
 

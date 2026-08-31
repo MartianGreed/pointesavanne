@@ -1,10 +1,11 @@
 import { Component, afterNextRender, inject, signal } from "@angular/core"
-import { Router, RouterLink } from "@angular/router"
+import { ActivatedRoute, Router, RouterLink } from "@angular/router"
 import { Auth } from "../core/auth.service"
 import { ApiError } from "../core/api"
+import { BookingService } from "../core/booking.service"
+import { QuoteFunnelStore } from "../core/quote-funnel.store"
 import { passkeysSupported } from "../core/passkey"
 import { passkeyErrorMessage } from "../core/passkey-errors"
-import { takeDevisIntent } from "../core/form-storage"
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -335,6 +336,9 @@ type Mode = "connexion" | "inscription"
 export class LoginPage {
   readonly #auth = inject(Auth)
   readonly #router = inject(Router)
+  readonly #route = inject(ActivatedRoute)
+  readonly #bookings = inject(BookingService)
+  readonly #funnel = inject(QuoteFunnelStore)
 
   readonly mode = signal<Mode>("connexion")
   readonly prenom = signal("")
@@ -349,7 +353,16 @@ export class LoginPage {
   readonly passkeyOk = signal(false)
 
   constructor() {
-    afterNextRender(() => this.passkeyOk.set(passkeysSupported()))
+    afterNextRender(() => {
+      this.passkeyOk.set(passkeysSupported())
+      // The devis funnel sends the visitor straight to account creation,
+      // with the contact details they already typed.
+      if (this.#route.snapshot.queryParamMap.get("mode") === "inscription") this.mode.set("inscription")
+      const contact = this.#funnel.contact()
+      if (contact.prenom !== "") this.prenom.set(contact.prenom)
+      if (contact.nom !== "") this.nom.set(contact.nom)
+      if (contact.email !== "") this.email.set(contact.email)
+    })
   }
 
   versConnexion(): void {
@@ -417,13 +430,23 @@ export class LoginPage {
   }
 
   /**
-   * Post-sign-in destination, by priority: a quotation the visitor was
-   * sending (F1), then the owner console for owners (E5), else the customer
-   * area.
+   * Post-sign-in destination. The claim runs first — it converts any
+   * quotation lead the visitor left into a real request (nothing to do for
+   * most sign-ins) — then a converted lead goes straight to the customer
+   * area where the request is waiting, owners to their console.
    */
   private async apresConnexion(): Promise<void> {
-    if (takeDevisIntent()) {
-      await this.#router.navigate(["/devis"])
+    let converted = false
+    try {
+      const outcome = await this.#bookings.claimLeads()
+      this.#funnel.recordClaim(outcome)
+      converted = outcome.claimed > 0 && outcome.bookings.length > 0
+    } catch {
+      // A failed claim must never block the sign-in; the request can be
+      // resent from /devis.
+    }
+    if (converted) {
+      await this.#router.navigate(["/espace-client"])
       return
     }
     await this.#router.navigate([this.#auth.isOwner() ? "/proprietaire/reservations" : "/espace-client"])
@@ -458,7 +481,9 @@ export class LoginPage {
         phoneNumber: "",
       })
       this.info.set(
-        `Votre compte a bien été créé, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous. Après votre première connexion, vous pourrez enregistrer une clé d'accès pour vous connecter sans mot de passe.`,
+        this.#funnel.pendingLead()
+          ? `Votre demande de devis est enregistrée, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous — votre demande sera finalisée automatiquement.`
+          : `Votre compte a bien été créé, ${this.prenom()}. Un e-mail de confirmation vient de vous être envoyé : suivez le lien qu'il contient puis connectez-vous. Après votre première connexion, vous pourrez enregistrer une clé d'accès pour vous connecter sans mot de passe.`,
       )
     } catch (e) {
       const problem = e as { problem?: { issues?: string[]; message?: string } }

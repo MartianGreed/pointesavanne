@@ -1,7 +1,7 @@
 import { Component, inject, signal } from "@angular/core"
 import { Router, RouterLink } from "@angular/router"
 import { nightsBetween, stayQueryParams } from "../core/form-state"
-import { writeStay } from "../core/form-storage"
+import { QuoteFunnelStore } from "../core/quote-funnel.store"
 import { WEEKLY_BASE } from "../shared/estimate"
 
 interface DispoMessage {
@@ -913,6 +913,7 @@ interface Step {
 })
 export class HomePage {
   readonly #router = inject(Router)
+  readonly #funnel = inject(QuoteFunnelStore)
 
   readonly arrivee = signal("")
   readonly depart = signal("")
@@ -966,7 +967,7 @@ export class HomePage {
       this.dispo.set({ text: "La date de départ doit être postérieure à la date d'arrivée.", ok: false })
       return
     }
-    writeStay(stay)
+    this.#funnel.setStay(stay)
     void this.#router.navigate(["/devis"], { queryParams: stayQueryParams(stay) })
   }
 }

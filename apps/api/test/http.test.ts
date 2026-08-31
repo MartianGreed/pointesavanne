@@ -45,7 +45,7 @@ const config: ApiConfig = {
   obs: { logLevel: "info", logFormat: "json", otlpUrl: { _tag: "None" } } as any,
 }
 
-const mails: Array<{ to: string; subject: string }> = []
+const mails: Array<{ to: string; subject: string; body: string }> = []
 const files = new Map<string, Uint8Array>()
 const catalog = MutableVillaCatalog()
 catalog.set(defaultVilla)
@@ -318,6 +318,99 @@ describe("booking api", () => {
     const own = await json("GET", `/bookings/${quotation.bookingId}`, undefined, cookie)
     expect(own.status).toBe(200)
     expect(((await own.json()) as { customerId: string }).customerId).toBeTruthy()
+  })
+})
+
+describe("quotation lead funnel", () => {
+  test("an anonymous lead survives registration and is claimed at first sign-in", async () => {
+    // 1. The anonymous visitor asks for a devis — no session, no account.
+    const submitted = await json("POST", "/bookings/leads", {
+      email: "lead@example.com",
+      firstname: "Marie",
+      lastname: "Dupont",
+      phoneNumber: "+596 696 12 34 56",
+      villaId: "villa-de-standing-pointe-savanne",
+      from: "2022-07-09",
+      to: "2022-07-23",
+      adultsCount: 4,
+      message: "Arrivée tardive vers 20 h",
+    })
+    expect(submitted.status).toBe(200)
+    const lead = (await submitted.json()) as { leadId: string; status: string }
+    expect(lead.status).toBe("submitted")
+    expect(lead.leadId).toBe("lead:lead@example.com")
+
+    // A newer anonymous submission replaces the pending one (2 travellers,
+    // same dates — the claim below asserts it is this one that won).
+    const resubmitted = await json("POST", "/bookings/leads", {
+      email: "LEAD@example.com",
+      firstname: "Marie",
+      lastname: "Dupont",
+      phoneNumber: "+596 696 12 34 56",
+      villaId: "villa-de-standing-pointe-savanne",
+      from: "2022-07-09",
+      to: "2022-07-23",
+      adultsCount: 2,
+      message: "Arrivée tardive vers 20 h",
+    })
+    expect(resubmitted.status).toBe(200)
+
+    // 2. Registration + verification + sign-in — the e-mail round-trip
+    //    that kills any client-side state.
+    await json("POST", "/auth/register/password", { email: "lead@example.com", password: "long-lead-password-1" })
+    const verification = authEmails.find((mail) => mail.kind === "email-verification" && mail.to === "lead@example.com")
+    await json("POST", "/auth/verify-email", { token: verification!.token })
+    const signedIn = await json("POST", "/auth/sign-in/password", {
+      email: "lead@example.com",
+      password: "long-lead-password-1",
+    })
+    const cookie = signedIn.headers.get("set-cookie")!.split(";")[0]!
+
+    // 3. The claim derives the e-mail from the session, converts the lead.
+    const claimResponse = await json("POST", "/bookings/leads/claim", {}, cookie)
+    expect(claimResponse.status).toBe(200)
+    const claim = (await claimResponse.json()) as {
+      claimed: number
+      bookings: Array<{ bookingId: string; status: string; pricing: { totalAmount: number } }>
+      issues: string[]
+    }
+    expect(claim.claimed).toBe(1)
+    expect(claim.issues).toEqual([])
+    expect(claim.bookings).toHaveLength(1)
+    expect(claim.bookings[0]!.status).toBe("quotation-requested")
+    // The pinned legacy algorithm prices this 14-night July stay at 3230 €
+    // (2 weeks at 1700 €/week, time-discount applied) — the resubmitted lead.
+    expect(claim.bookings[0]!.pricing.totalAmount).toBe(3230)
+
+    // 4. The projections hydrate the read models, then the customer finds
+    //    their space already filled: profile + request + owner notification.
+    await runWorkers()
+    const profile = await json("GET", "/customers/profile", undefined, cookie)
+    expect(profile.status).toBe(200)
+    const saved = ((await profile.json()) as { profile: { firstname: string; lastname: string; phoneNumber: string } }).profile
+    expect(saved.firstname).toBe("Marie")
+    expect(saved.lastname).toBe("Dupont")
+    expect(saved.phoneNumber).toBe("+596 696 12 34 56")
+
+    // 5. The request is in the customer's space, and the visitor's message
+    //    reached the owner's notification.
+    const mine = await json("GET", "/bookings/my", undefined, cookie)
+    expect(mine.status).toBe(200)
+    expect(((await mine.json()) as { items: unknown[] }).items).toHaveLength(1)
+    const adminMail = mails.find((mail) => mail.to === config.adminMail && mail.subject.includes(claim.bookings[0]!.bookingId))
+    expect(adminMail?.body).toContain("Arrivée tardive vers 20 h")
+    // 2 adultes — the resubmitted lead won, not the first one.
+    expect(adminMail?.body).toContain("Occupants : 2 adulte(s)")
+
+    // 6. The claim is idempotent: no pending lead, nothing to convert.
+    const again = await json("POST", "/bookings/leads/claim", {}, cookie)
+    expect(again.status).toBe(200)
+    expect(((await again.json()) as { claimed: number }).claimed).toBe(0)
+
+    // 7. Anonymous claims are rejected at the edge (401), and one customer
+    //    cannot claim another e-mail's lead — the e-mail is session-derived.
+    const anonymous = await json("POST", "/bookings/leads/claim", {})
+    expect(anonymous.status).toBe(401)
   })
 })
 

@@ -59,7 +59,9 @@ export const CustomerProfile = Aggregate.define<ProfileState, ProfileCommand, Pr
     if (!emailRe.test(command.email)) {
       issues.push("Email is not properly formatted")
     }
-    if (!phoneRe.test(command.phoneNumber)) {
+    // A phone number is optional (the devis form leaves it empty); when
+    // provided it must be a plausible phone number.
+    if (command.phoneNumber !== "" && !phoneRe.test(command.phoneNumber)) {
       issues.push("Phone number is not valid")
     }
     if (issues.length > 0) {

@@ -9,6 +9,7 @@ import { MutableVillaCatalog } from "../src/catalog.ts"
 import { handlers } from "../src/handlers.ts"
 import { AppAuthTag, tenantConfigOf } from "../src/auth.ts"
 import { FileNotFound, FileStore, Mailer, QuotationPdf, type OutgoingMail, type QuotationBookingData } from "../src/infra.ts"
+import { type ClaimQuotationLeadsSuccessType } from "../src/messages/index.ts"
 import { viewMigrations } from "../src/migrations.ts"
 import { TENANT_ID } from "../src/policy.ts"
 import { DomainConfigTag, type DomainConfig } from "../src/settings.ts"
@@ -147,6 +148,11 @@ export class DomainWorld extends ScenarioWorld<WorldServices> {
   lastResetToken?: string
   quotationRequest?: QuotationRequestData
   profileRequest?: { language?: string; firstname?: string; lastname?: string; line1?: string; line3?: string }
+
+  // Quotation-lead funnel: the anonymous visitor's contact (Given) and the
+  // observed claim outcome (When → Then).
+  leadContact?: { email: string; firstname: string; lastname: string; phoneNumber: string }
+  leadClaim?: ClaimQuotationLeadsSuccessType
 
   // Observed results.
   quotationResult?: QuotationResult

@@ -191,6 +191,7 @@ const quotationSummary = (event: Extract<AppEvent, { _tag: "BookingRequested" }>
     `Taxe touristique (classé 4 étoiles) : ${formatEuros(event.pricing.rankedTouristTax)}`,
     `Caution : ${formatEuros(event.pricing.depositAmount)}`,
     `Ménage obligatoire : ${formatEuros(event.pricing.householdAmount)}`,
+    ...(event.message !== undefined ? ["", `Message du client : ${event.message}`] : []),
   ])
 
 /** Authoritative booking state — never depends on projection progress. */
