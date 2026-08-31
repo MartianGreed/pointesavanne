@@ -1,30 +1,31 @@
-import { Component, computed, inject, signal, viewChild } from "@angular/core"
-import { ElementRef } from "@angular/core"
-import { RouterLink } from "@angular/router"
-import { Auth } from "../core/auth.service"
-import { passkeyErrorMessage } from "../core/passkey-errors"
-import { BookingService, type BookingRow } from "../core/booking.service"
-import { ProfileService, type Profile } from "../core/profile.service"
-import { QuoteFunnelStore } from "../core/quote-funnel.store"
-import { longDate, statusStyle } from "../shared/booking-status"
-import { euros } from "../shared/estimate"
+import { Component, computed, inject, signal, viewChild } from '@angular/core';
+import { ElementRef } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { Auth } from '../core/auth.service';
+import { passkeyErrorMessage } from '../core/passkey-errors';
+import { BookingService, type BookingRow } from '../core/booking.service';
+import { ProfileService, type Profile } from '../core/profile.service';
+import { Internationalization } from '../core/internationalization';
+import { QuoteFunnelStore } from '../core/quote-funnel.store';
+import type { TextTranslationKey } from '../core/translations/fr';
+import { statusStyle } from '../shared/booking-status';
 
-type Tab = "reservations" | "documents" | "profil"
+type Tab = 'reservations' | 'documents' | 'profil';
 
-type ProfileField = "firstname" | "lastname" | "email" | "phoneNumber" | "line1"
+type ProfileField = 'firstname' | 'lastname' | 'email' | 'phoneNumber' | 'line1';
 
 interface DocumentRow {
-  readonly name: string
-  readonly detail: string
-  readonly badge: string
-  readonly badgeBg: string
-  readonly badgeColor: string
-  readonly href?: string
+  readonly name: string;
+  readonly detail: string;
+  readonly badge: string;
+  readonly badgeBg: string;
+  readonly badgeColor: string;
+  readonly href?: string;
 }
 
 /** The customer area: reservations, documents and profile, per the design. */
 @Component({
-  selector: "app-customer-area",
+  selector: 'app-customer-area',
   imports: [RouterLink],
   template: `
     <section class="container layout">
@@ -43,56 +44,61 @@ interface DocumentRow {
             [class.active]="onglet() === t.id"
             (click)="onglet.set(t.id)"
           >
-            {{ t.label }}
+            {{ i18n.t(t.labelKey) }}
           </button>
         }
         <div class="sidebar-footer">
-          <a routerLink="/devis">+ Nouvelle demande de devis</a>
+          <a routerLink="/devis">{{ i18n.t('customer.newQuote') }}</a>
         </div>
       </aside>
 
       <div class="content">
-        @if (onglet() === "reservations") {
-          <h1 class="page-title">Mes réservations</h1>
+        @if (onglet() === 'reservations') {
+          <h1 class="page-title">{{ i18n.t('customer.tabs.bookings') }}</h1>
           @if (claimIssue(); as issue) {
             <div class="box box-err">{{ issue }}</div>
           }
           @if (bookings().length === 0) {
             <div class="card empty">
-              <p>Aucune demande pour le moment.</p>
-              <a routerLink="/devis" class="btn btn-sm">Demander un devis</a>
+              <p>{{ i18n.t('customer.bookings.empty') }}</p>
+              <a routerLink="/devis" class="btn btn-sm">{{ i18n.t('navigation.requestQuote') }}</a>
             </div>
           }
           @for (b of bookings(); track b.bookingId) {
             <div class="card booking">
               <div class="booking-head">
-                <span class="booking-dates">{{ longDate(b.from) }} → {{ longDate(b.to) }}</span>
+                <span class="booking-dates"
+                  >{{ i18n.longDate(b.from) }} → {{ i18n.longDate(b.to) }}</span
+                >
                 <span
                   class="badge"
                   [style.background]="style(b.status).bg"
                   [style.color]="style(b.status).color"
                 >
-                  {{ style(b.status).label }}
+                  {{ i18n.t(style(b.status).labelKey) }}
                 </span>
-                <span class="booking-total">{{ euros(b.totalAmount) }}</span>
+                <span class="booking-total">{{ i18n.euros(b.totalAmount) }}</span>
               </div>
               <div class="booking-meta">
-                <span>{{ b.nights }} nuit{{ b.nights > 1 ? "s" : "" }}</span>
-                <span>{{ b.adultsCount + b.childrenCount }} voyageurs</span>
-                <span>Référence {{ b.bookingId }}</span>
+                <span>{{ i18n.plural('common.nights', b.nights) }}</span>
+                <span>{{ i18n.plural('common.travelers', b.adultsCount + b.childrenCount) }}</span>
+                <span>{{ i18n.t('customer.bookings.reference', { bookingId: b.bookingId }) }}</span>
               </div>
-              @if (style(b.status).nextStep) {
-                <div class="next-step">{{ style(b.status).nextStep }}</div>
-              }
+              <div class="next-step">{{ i18n.t(style(b.status).nextStepKey) }}</div>
               <div class="actions">
-                @if (b.status === "quotation-awaiting-acceptation") {
+                @if (b.status === 'quotation-awaiting-acceptation') {
                   <button type="button" class="btn btn-sm" (click)="openFilePicker(b)">
-                    Signer le devis en ligne
+                    {{ i18n.t('customer.bookings.signQuote') }}
                   </button>
                 }
                 @if (b.pdfPath) {
-                  <a class="btn btn-outline btn-sm" [href]="b.pdfPath" target="_blank" rel="noopener">
-                    Télécharger le devis (PDF)
+                  <a
+                    class="btn btn-outline btn-sm"
+                    [href]="b.pdfPath"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    {{ i18n.t('customer.bookings.downloadQuote') }}
                   </a>
                 }
               </div>
@@ -100,11 +106,11 @@ interface DocumentRow {
           }
         }
 
-        @if (onglet() === "documents") {
-          <h1 class="page-title">Mes documents</h1>
+        @if (onglet() === 'documents') {
+          <h1 class="page-title">{{ i18n.t('customer.tabs.documents') }}</h1>
           @if (documents().length === 0) {
             <div class="card empty">
-              <p>Aucun document pour le moment. Vos devis apparaîtront ici dès qu'ils seront prêts.</p>
+              <p>{{ i18n.t('customer.documents.empty') }}</p>
             </div>
           }
           <div class="card doc-list">
@@ -118,86 +124,147 @@ interface DocumentRow {
                   <span class="doc-name">{{ d.name }}</span>
                   <span class="doc-detail">{{ d.detail }}</span>
                 </span>
-                <span class="badge" [style.background]="d.badgeBg" [style.color]="d.badgeColor">{{ d.badge }}</span>
+                <span class="badge" [style.background]="d.badgeBg" [style.color]="d.badgeColor">{{
+                  d.badge
+                }}</span>
                 @if (d.href) {
-                  <a class="btn btn-outline btn-xs" [href]="d.href" target="_blank" rel="noopener">Télécharger</a>
+                  <a
+                    class="btn btn-outline btn-xs"
+                    [href]="d.href"
+                    target="_blank"
+                    rel="noopener"
+                    >{{ i18n.t('common.actions.download') }}</a
+                  >
                 } @else {
-                  <span class="doc-soon">Bientôt disponible</span>
+                  <span class="doc-soon">{{ i18n.t('customer.documents.soon') }}</span>
                 }
               </div>
             }
           </div>
         }
 
-        @if (onglet() === "profil") {
-          <h1 class="page-title">Mon profil</h1>
+        @if (onglet() === 'profil') {
+          <h1 class="page-title">{{ i18n.t('customer.tabs.profile') }}</h1>
           @if (profile(); as p) {
             <div class="card profil-card">
               <div class="profil-grid">
                 <label class="field">
-                  <span class="field-label">Prénom</span>
-                  <input type="text" [value]="p.firstname" (input)="setProfileField('firstname', $event)" />
+                  <span class="field-label">{{ i18n.t('fields.firstname') }}</span>
+                  <input
+                    type="text"
+                    [value]="p.firstname"
+                    (input)="setProfileField('firstname', $event)"
+                  />
                 </label>
                 <label class="field">
-                  <span class="field-label">Nom</span>
-                  <input type="text" [value]="p.lastname" (input)="setProfileField('lastname', $event)" />
+                  <span class="field-label">{{ i18n.t('fields.lastname') }}</span>
+                  <input
+                    type="text"
+                    [value]="p.lastname"
+                    (input)="setProfileField('lastname', $event)"
+                  />
                 </label>
                 <label class="field">
-                  <span class="field-label">E-mail</span>
-                  <input type="email" [value]="p.email" (input)="setProfileField('email', $event)" />
+                  <span class="field-label">{{ i18n.t('fields.email') }}</span>
+                  <input
+                    type="email"
+                    [value]="p.email"
+                    (input)="setProfileField('email', $event)"
+                  />
                 </label>
                 <label class="field">
-                  <span class="field-label">Téléphone</span>
-                  <input type="tel" [value]="p.phoneNumber" (input)="setProfileField('phoneNumber', $event)" />
+                  <span class="field-label">{{ i18n.t('fields.phone') }}</span>
+                  <input
+                    type="tel"
+                    [value]="p.phoneNumber"
+                    (input)="setProfileField('phoneNumber', $event)"
+                  />
                 </label>
                 <label class="field span-2">
-                  <span class="field-label">Adresse postale</span>
+                  <span class="field-label">{{ i18n.t('fields.postalAddress') }}</span>
                   <input
                     type="text"
                     [value]="p.line1 ?? ''"
                     (input)="setProfileField('line1', $event)"
-                    placeholder="N°, rue, code postal, ville, pays"
+                    [placeholder]="i18n.t('placeholders.postalAddress')"
                   />
                 </label>
               </div>
 
               <div class="password-block">
                 <label class="field">
-                  <span class="field-label">Mot de passe actuel</span>
-                  <input type="password" [value]="mdpActuel()" (input)="mdpActuel.set(inputValue($event))" autocomplete="current-password" />
+                  <span class="field-label">{{ i18n.t('fields.currentPassword') }}</span>
+                  <input
+                    type="password"
+                    [value]="mdpActuel()"
+                    (input)="mdpActuel.set(inputValue($event))"
+                    autocomplete="current-password"
+                  />
                 </label>
                 <label class="field">
-                  <span class="field-label">Nouveau mot de passe</span>
-                  <input type="password" [value]="nouveauMdp()" (input)="nouveauMdp.set(inputValue($event))" placeholder="Laisser vide pour ne pas changer" autocomplete="new-password" />
+                  <span class="field-label">{{ i18n.t('fields.newPassword') }}</span>
+                  <input
+                    type="password"
+                    [value]="nouveauMdp()"
+                    (input)="nouveauMdp.set(inputValue($event))"
+                    [placeholder]="i18n.t('placeholders.optionalPassword')"
+                    autocomplete="new-password"
+                  />
                 </label>
                 <label class="field">
-                  <span class="field-label">Confirmer le nouveau mot de passe</span>
-                  <input type="password" [value]="nouveauMdp2()" (input)="nouveauMdp2.set(inputValue($event))" autocomplete="new-password" />
+                  <span class="field-label">{{ i18n.t('fields.confirmNewPassword') }}</span>
+                  <input
+                    type="password"
+                    [value]="nouveauMdp2()"
+                    (input)="nouveauMdp2.set(inputValue($event))"
+                    autocomplete="new-password"
+                  />
                 </label>
               </div>
 
               <div class="passkey-block">
-                <span class="field-label">Clé d'accès (connexion sans mot de passe)</span>
-                <p class="passkey-text">
-                  Enregistrez une clé d'accès sur cet appareil — Face ID, Touch ID, Windows Hello ou une
-                  clé de sécurité USB — pour vous connecter en un geste, sans mot de passe.
-                </p>
-                <button type="button" class="btn btn-outline btn-sm" (click)="ajouterPasskey()" [disabled]="busy()">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-right: 8px;">
+                <span class="field-label">{{ i18n.t('customer.profile.passkey.title') }}</span>
+                <p class="passkey-text">{{ i18n.t('customer.profile.passkey.description') }}</p>
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  (click)="ajouterPasskey()"
+                  [disabled]="busy()"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="16"
+                    height="16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    style="margin-right: 8px;"
+                  >
                     <circle cx="8" cy="15" r="4.2"></circle>
                     <path d="M10.8 12.2L21 2M16 7l3 3M13 10l2 2"></path>
                   </svg>
-                  Enregistrer une clé d'accès
+                  {{ i18n.t('customer.profile.passkey.action') }}
                 </button>
               </div>
 
               @if (message(); as m) {
-                <div class="box" [class.box-ok]="m.ok" [class.box-err]="!m.ok" style="margin-top: 22px;">
+                <div
+                  class="box"
+                  [class.box-ok]="m.ok"
+                  [class.box-err]="!m.ok"
+                  style="margin-top: 22px;"
+                >
                   {{ m.text }}
                 </div>
               }
-              <button type="button" class="btn btn-md" style="margin-top: 26px;" (click)="enregistrer()" [disabled]="busy()">
-                Enregistrer les modifications
+              <button
+                type="button"
+                class="btn btn-md"
+                style="margin-top: 26px;"
+                (click)="enregistrer()"
+                [disabled]="busy()"
+              >
+                {{ i18n.t('customer.profile.save') }}
               </button>
             </div>
           }
@@ -459,141 +526,143 @@ interface DocumentRow {
   `,
 })
 export class CustomerAreaPage {
-  readonly #auth = inject(Auth)
-  readonly #profiles = inject(ProfileService)
-  readonly #bookings = inject(BookingService)
-  readonly #funnel = inject(QuoteFunnelStore)
+  readonly i18n = inject(Internationalization);
+  readonly #auth = inject(Auth);
+  readonly #profiles = inject(ProfileService);
+  readonly #bookings = inject(BookingService);
+  readonly #funnel = inject(QuoteFunnelStore);
 
-  readonly tabs: readonly { id: Tab; label: string }[] = [
-    { id: "reservations", label: "Mes réservations" },
-    { id: "documents", label: "Mes documents" },
-    { id: "profil", label: "Mon profil" },
-  ]
+  readonly tabs: readonly { id: Tab; labelKey: TextTranslationKey }[] = [
+    { id: 'reservations', labelKey: 'customer.tabs.bookings' },
+    { id: 'documents', labelKey: 'customer.tabs.documents' },
+    { id: 'profil', labelKey: 'customer.tabs.profile' },
+  ];
 
-  readonly onglet = signal<Tab>("reservations")
-  readonly profile = signal<Profile | null>(null)
-  readonly bookings = signal<BookingRow[]>([])
-  readonly busy = signal(false)
-  readonly message = signal<{ text: string; ok: boolean } | null>(null)
+  readonly onglet = signal<Tab>('reservations');
+  readonly profile = signal<Profile | null>(null);
+  readonly bookings = signal<BookingRow[]>([]);
+  readonly busy = signal(false);
+  readonly message = signal<{ text: string; ok: boolean } | null>(null);
 
-  readonly mdpActuel = signal("")
-  readonly nouveauMdp = signal("")
-  readonly nouveauMdp2 = signal("")
+  readonly mdpActuel = signal('');
+  readonly nouveauMdp = signal('');
+  readonly nouveauMdp2 = signal('');
 
-  readonly fileInput = viewChild.required<ElementRef<HTMLInputElement>>("fileInput")
-  #uploadBookingId: string | null = null
+  readonly fileInput = viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
+  #uploadBookingId: string | null = null;
 
-  readonly style = statusStyle
-  readonly longDate = longDate
-  readonly euros = euros
+  readonly style = statusStyle;
 
   readonly initiales = computed(() => {
-    const p = this.profile()
-    if (p === null) return "…"
-    return `${p.firstname.charAt(0)}${p.lastname.charAt(0)}`.toUpperCase() || "?"
-  })
+    const p = this.profile();
+    if (p === null) return '…';
+    return `${p.firstname.charAt(0)}${p.lastname.charAt(0)}`.toUpperCase() || '?';
+  });
 
   readonly nomComplet = computed(() => {
-    const p = this.profile()
-    return p === null ? "" : `${p.firstname} ${p.lastname}`.trim()
-  })
+    const p = this.profile();
+    return p === null ? '' : `${p.firstname} ${p.lastname}`.trim();
+  });
 
-  readonly emailProfil = computed(() => this.profile()?.email ?? this.#auth.user()?.email ?? "")
+  readonly emailProfil = computed(() => this.profile()?.email ?? this.#auth.user()?.email ?? '');
 
   /** Why a lead claimed at sign-in produced no booking, when that happened. */
   readonly claimIssue = computed(() => {
-    const result = this.#funnel.claimResult()
-    if (result === null || result.issues.length === 0) return null
-    return `Votre demande n'a pas pu être enregistrée : ${result.issues.join(" ; ")}. Vous pouvez renouveler la demande avec d'autres dates.`
-  })
+    const result = this.#funnel.claimResult();
+    if (result === null || result.issues.length === 0) return null;
+    return this.i18n.t('errors.quotation.claim');
+  });
 
   readonly documents = computed<DocumentRow[]>(() => {
-    const rows: DocumentRow[] = []
+    const rows: DocumentRow[] = [];
     for (const b of this.bookings()) {
-      const dates = `${longDate(b.from)} → ${longDate(b.to)}`
+      const dates = `${this.i18n.longDate(b.from)} → ${this.i18n.longDate(b.to)}`;
       if (b.pdfPath !== undefined) {
         rows.push({
-          name: `Devis ${b.bookingId}.pdf`,
+          name: this.i18n.t('customer.documents.quote.name', { bookingId: b.bookingId }),
           detail: dates,
-          badge: "Devis",
-          badgeBg: "#E7EEF7",
-          badgeColor: "#2C517E",
+          badge: this.i18n.t('customer.documents.quote.badge'),
+          badgeBg: '#E7EEF7',
+          badgeColor: '#2C517E',
           href: b.pdfPath,
-        })
+        });
       }
       if (b.signedFileName !== undefined) {
         rows.push({
           name: b.signedFileName,
-          detail: "Devis signé téléversé",
-          badge: "Signé",
-          badgeBg: "#EAF0EA",
-          badgeColor: "#1E4436",
-        })
+          detail: this.i18n.t('customer.documents.signed.detail'),
+          badge: this.i18n.t('customer.documents.signed.badge'),
+          badgeBg: '#EAF0EA',
+          badgeColor: '#1E4436',
+        });
       }
-      if (b.status === "contract-sent") {
+      if (b.status === 'contract-sent') {
         rows.push({
-          name: `Confirmation de réservation ${b.bookingId}.pdf`,
-          detail: "Validée par le propriétaire",
-          badge: "Confirmation",
-          badgeBg: "#1E4436",
-          badgeColor: "#FFFFFF",
-        })
+          name: this.i18n.t('customer.documents.confirmation.name', { bookingId: b.bookingId }),
+          detail: this.i18n.t('customer.documents.confirmation.detail'),
+          badge: this.i18n.t('customer.documents.confirmation.badge'),
+          badgeBg: '#1E4436',
+          badgeColor: '#FFFFFF',
+        });
       }
     }
-    return rows
-  })
+    return rows;
+  });
 
   constructor() {
-    void this.load()
+    void this.load();
   }
 
   async load(): Promise<void> {
     try {
-      const { profile } = await this.#profiles.get()
-      this.profile.set(profile ?? this.emptyProfile())
+      const { profile } = await this.#profiles.get();
+      this.profile.set(profile ?? this.emptyProfile());
     } catch {
-      this.profile.set(this.emptyProfile())
+      this.profile.set(this.emptyProfile());
     }
     try {
-      const { items } = await this.#bookings.myBookings()
-      this.bookings.set(items)
+      const { items } = await this.#bookings.myBookings();
+      this.bookings.set(items);
     } catch {
-      this.bookings.set([])
+      this.bookings.set([]);
     }
   }
 
   inputValue(event: Event): string {
-    return (event.target as HTMLInputElement).value
+    return (event.target as HTMLInputElement).value;
   }
 
   setProfileField(key: ProfileField, event: Event): void {
-    const value = this.inputValue(event)
-    this.profile.update((p) => (p === null ? p : ({ ...p, [key]: value } as Profile)))
-    this.message.set(null)
+    const value = this.inputValue(event);
+    this.profile.update((p) => (p === null ? p : ({ ...p, [key]: value } as Profile)));
+    this.message.set(null);
   }
 
   async enregistrer(): Promise<void> {
-    const p = this.profile()
-    if (p === null) return
-    if (p.firstname === "" || p.lastname === "" || p.email === "") {
-      this.message.set({ text: "Prénom, nom et e-mail sont obligatoires.", ok: false })
-      return
+    const p = this.profile();
+    if (p === null) return;
+    if (p.firstname === '' || p.lastname === '' || p.email === '') {
+      this.message.set({ text: this.i18n.t('errors.validation.profileRequired'), ok: false });
+      return;
     }
-    if (this.nouveauMdp() !== "" || this.nouveauMdp2() !== "") {
-      if (this.mdpActuel() === "") {
-        this.message.set({ text: "Saisissez votre mot de passe actuel pour le changer.", ok: false })
-        return
+    if (this.nouveauMdp() !== '' || this.nouveauMdp2() !== '') {
+      if (this.mdpActuel() === '') {
+        this.message.set({
+          text: this.i18n.t('errors.validation.currentPasswordRequired'),
+          ok: false,
+        });
+        return;
       }
       if (this.nouveauMdp().length < 8) {
-        this.message.set({ text: "Le nouveau mot de passe doit contenir au moins 8 caractères.", ok: false })
-        return
+        this.message.set({ text: this.i18n.t('errors.validation.newPasswordLength'), ok: false });
+        return;
       }
       if (this.nouveauMdp() !== this.nouveauMdp2()) {
-        this.message.set({ text: "Les deux mots de passe ne correspondent pas.", ok: false })
-        return
+        this.message.set({ text: this.i18n.t('errors.validation.passwordMismatch'), ok: false });
+        return;
       }
     }
-    this.busy.set(true)
+    this.busy.set(true);
     try {
       const saved = await this.#profiles.save({
         email: p.email,
@@ -601,70 +670,72 @@ export class CustomerAreaPage {
         lastname: p.lastname,
         phoneNumber: p.phoneNumber,
         ...(p.language !== undefined ? { language: p.language } : {}),
-        ...(p.line1 !== undefined && p.line1 !== "" ? { line1: p.line1 } : {}),
-        ...(p.line3 !== undefined && p.line3 !== "" ? { line3: p.line3 } : {}),
-      })
-      this.profile.set(saved)
-      if (this.nouveauMdp() !== "") {
-        await this.#auth.changePassword(this.mdpActuel(), this.nouveauMdp())
-        this.mdpActuel.set("")
-        this.nouveauMdp.set("")
-        this.nouveauMdp2.set("")
+        ...(p.line1 !== undefined && p.line1 !== '' ? { line1: p.line1 } : {}),
+        ...(p.line3 !== undefined && p.line3 !== '' ? { line3: p.line3 } : {}),
+      });
+      this.profile.set(saved);
+      if (this.nouveauMdp() !== '') {
+        await this.#auth.changePassword(this.mdpActuel(), this.nouveauMdp());
+        this.mdpActuel.set('');
+        this.nouveauMdp.set('');
+        this.nouveauMdp2.set('');
       }
-      this.message.set({ text: "Profil enregistré.", ok: true })
-    } catch (e) {
-      const problem = e as { problem?: { issues?: string[]; message?: string } }
-      this.message.set({ text: problem.problem?.issues?.[0] ?? problem.problem?.message ?? "Enregistrement impossible.", ok: false })
+      this.message.set({ text: this.i18n.t('customer.profile.saved'), ok: true });
+    } catch (cause) {
+      this.message.set({ text: this.i18n.error(cause, 'errors.profile.save'), ok: false });
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 
   /** Enrolls a passkey for the signed-in user via the browser ceremony. */
   async ajouterPasskey(): Promise<void> {
-    this.busy.set(true)
-    this.message.set(null)
+    this.busy.set(true);
+    this.message.set(null);
     try {
-      await this.#auth.registerPasskey()
+      await this.#auth.registerPasskey();
       this.message.set({
-        text: "Clé d'accès enregistrée. Vous pouvez maintenant vous connecter sans mot de passe depuis cet appareil.",
+        text: this.i18n.t('customer.profile.passkey.saved'),
         ok: true,
-      })
-    } catch (e) {
-      this.message.set({ text: passkeyErrorMessage(e, "Enregistrement de la clé d'accès impossible."), ok: false })
+      });
+    } catch (cause) {
+      this.message.set({
+        text: passkeyErrorMessage(cause, this.i18n, 'errors.passkey.registration'),
+        ok: false,
+      });
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 
   openFilePicker(booking: BookingRow): void {
-    this.#uploadBookingId = booking.bookingId
-    this.fileInput().nativeElement.click()
+    this.#uploadBookingId = booking.bookingId;
+    this.fileInput().nativeElement.click();
   }
 
   async uploadSelected(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement
-    const file = input.files?.[0]
-    const bookingId = this.#uploadBookingId
-    input.value = ""
-    this.#uploadBookingId = null
-    if (file === undefined || bookingId === null) return
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    const bookingId = this.#uploadBookingId;
+    input.value = '';
+    this.#uploadBookingId = null;
+    if (file === undefined || bookingId === null) return;
     try {
-      await this.#bookings.uploadSignedQuotation(bookingId, file)
-      this.message.set({ text: "Devis signé téléversé. Le propriétaire va valider votre réservation.", ok: true })
-      await this.load()
-    } catch {
-      this.message.set({ text: "Téléversement impossible. Vérifiez le fichier et réessayez.", ok: false })
+      await this.#bookings.uploadSignedQuotation(bookingId, file);
+      this.message.set({ text: this.i18n.t('customer.bookings.uploaded'), ok: true });
+      await this.load();
+    } catch (cause) {
+      this.message.set({ text: this.i18n.error(cause, 'errors.booking.upload'), ok: false });
     }
   }
 
   private emptyProfile(): Profile {
     return {
-      customerId: "",
-      email: this.#auth.user()?.email ?? "",
-      firstname: "",
-      lastname: "",
-      phoneNumber: "",
-    }
+      customerId: '',
+      email: this.#auth.user()?.email ?? '',
+      firstname: '',
+      lastname: '',
+      phoneNumber: '',
+    };
   }
 }

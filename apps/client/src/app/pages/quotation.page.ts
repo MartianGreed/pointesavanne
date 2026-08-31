@@ -1,20 +1,26 @@
-import { Component, afterNextRender, computed, inject, signal } from "@angular/core"
-import { ActivatedRoute, Router, RouterLink } from "@angular/router"
-import { Auth } from "../core/auth.service"
-import { BookingService, VILLA_ID } from "../core/booking.service"
-import { ProfileService } from "../core/profile.service"
-import { fillContactGaps, fillStayGaps, nightsBetween, type ContactState } from "../core/form-state"
-import { QuoteFunnelStore } from "../core/quote-funnel.store"
-import { euros, estimateStay } from "../shared/estimate"
+import { Component, afterNextRender, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Auth } from '../core/auth.service';
+import { BookingService, VILLA_ID } from '../core/booking.service';
+import { ProfileService } from '../core/profile.service';
+import {
+  fillContactGaps,
+  fillStayGaps,
+  nightsBetween,
+  type ContactState,
+} from '../core/form-state';
+import { Internationalization } from '../core/internationalization';
+import { QuoteFunnelStore } from '../core/quote-funnel.store';
+import { estimateStay } from '../shared/estimate';
 
-type Availability = "unknown" | "checking" | "available" | "unavailable" | "invalid"
+type Availability = 'unknown' | 'checking' | 'available' | 'unavailable' | 'invalid';
 
 interface QuotationResult {
-  readonly nights: number
-  readonly totalAmount: number
-  readonly unrankedTouristTax: number
-  readonly depositAmount: number
-  readonly householdAmount: number
+  readonly nights: number;
+  readonly totalAmount: number;
+  readonly unrankedTouristTax: number;
+  readonly depositAmount: number;
+  readonly householdAmount: number;
 }
 
 /**
@@ -23,37 +29,34 @@ interface QuotationResult {
  * API's exact pricing once the request is registered.
  */
 @Component({
-  selector: "app-quotation",
+  selector: 'app-quotation',
   imports: [RouterLink],
   template: `
     <section class="container intro">
-      <div class="kicker">DISPONIBILITÉS &amp; DEVIS</div>
-      <h1 class="title">Vérifiez les disponibilités et recevez votre devis</h1>
-      <p class="text">
-        Choisissez vos dates pour vérifier la disponibilité de la villa, puis complétez vos
-        coordonnées : votre devis détaillé vous est envoyé par e-mail.
-      </p>
+      <div class="kicker">{{ i18n.t('quotation.kicker') }}</div>
+      <h1 class="title">{{ i18n.t('quotation.title') }}</h1>
+      <p class="text">{{ i18n.t('quotation.intro') }}</p>
     </section>
 
     <section class="container layout">
       <div class="column">
         <div class="card step-card">
-          <h2 class="step-title">1. Vos dates</h2>
+          <h2 class="step-title">{{ i18n.t('quotation.steps.dates') }}</h2>
           <div class="dates-grid">
             <label class="field">
-              <span class="field-label">Arrivée</span>
+              <span class="field-label">{{ i18n.t('fields.arrival') }}</span>
               <input type="date" [value]="arrivee()" (change)="onArrivee($event)" />
             </label>
             <label class="field">
-              <span class="field-label">Départ</span>
+              <span class="field-label">{{ i18n.t('fields.departure') }}</span>
               <input type="date" [value]="depart()" (change)="onDepart($event)" />
             </label>
             <label class="field">
-              <span class="field-label">Voyageurs</span>
+              <span class="field-label">{{ i18n.t('fields.travelers') }}</span>
               <span class="select-wrap">
                 <select [value]="voyageurs()" (change)="onVoyageurs($event)">
                   @for (n of [2, 3, 4, 5, 6, 7, 8]; track n) {
-                    <option [value]="n">{{ n }} voyageurs</option>
+                    <option [value]="n">{{ i18n.plural('common.travelers', n) }}</option>
                   }
                 </select>
                 <svg viewBox="0 0 20 20" fill="none" stroke="#55665E" stroke-width="1.4">
@@ -63,44 +66,73 @@ interface QuotationResult {
             </label>
           </div>
           @if (dispoVisible()) {
-            <div class="box" [class.box-ok]="dispoOk()" [class.box-err]="!dispoOk()" style="margin-top: 20px;">
+            <div
+              class="box"
+              [class.box-ok]="dispoOk()"
+              [class.box-err]="!dispoOk()"
+              style="margin-top: 20px;"
+            >
               {{ dispoMessage() }}
             </div>
           }
         </div>
 
         <div class="card step-card">
-          <h2 class="step-title">2. Vos coordonnées</h2>
+          <h2 class="step-title">{{ i18n.t('quotation.steps.contact') }}</h2>
           <div class="coords-grid">
             <label class="field">
-              <span class="field-label">Prénom</span>
-              <input type="text" [value]="prenom()" (input)="setField('prenom', $event)" placeholder="Marie" />
+              <span class="field-label">{{ i18n.t('fields.firstname') }}</span>
+              <input
+                type="text"
+                [value]="prenom()"
+                (input)="setField('prenom', $event)"
+                [placeholder]="i18n.t('placeholders.firstname')"
+              />
             </label>
             <label class="field">
-              <span class="field-label">Nom</span>
-              <input type="text" [value]="nom()" (input)="setField('nom', $event)" placeholder="Dupont" />
+              <span class="field-label">{{ i18n.t('fields.lastname') }}</span>
+              <input
+                type="text"
+                [value]="nom()"
+                (input)="setField('nom', $event)"
+                [placeholder]="i18n.t('placeholders.lastname')"
+              />
             </label>
             <label class="field">
-              <span class="field-label">E-mail</span>
-              <input type="email" [value]="email()" (input)="setField('email', $event)" placeholder="marie.dupont@mail.com" />
+              <span class="field-label">{{ i18n.t('fields.email') }}</span>
+              <input
+                type="email"
+                [value]="email()"
+                (input)="setField('email', $event)"
+                [placeholder]="i18n.t('placeholders.email')"
+              />
             </label>
             <label class="field">
-              <span class="field-label">Téléphone</span>
-              <input type="tel" [value]="tel()" (input)="setField('tel', $event)" placeholder="+596 696 12 34 56" />
+              <span class="field-label">{{ i18n.t('fields.phone') }}</span>
+              <input
+                type="tel"
+                [value]="tel()"
+                (input)="setField('tel', $event)"
+                [placeholder]="i18n.t('placeholders.phone')"
+              />
             </label>
             <label class="field span-2">
-              <span class="field-label">Message (facultatif)</span>
+              <span class="field-label">{{ i18n.t('fields.optionalMessage') }}</span>
               <textarea
                 rows="4"
                 [value]="message()"
                 (input)="setField('message', $event)"
-                placeholder="Précisez toute demande particulière : heure d'arrivée, lit bébé, etc."
+                [placeholder]="i18n.t('placeholders.quotationMessage')"
               ></textarea>
             </label>
           </div>
           <div class="submit-row">
-            <button type="button" class="btn btn-lg" (click)="submit()" [disabled]="busy()">Demander mon devis</button>
-            <span class="note">{{ auth.signedIn() ? "Sans engagement · réponse sous 24 h" : "Sans engagement · réponse sous 24 h · un compte est demandé à l'envoi" }}</span>
+            <button type="button" class="btn btn-lg" (click)="submit()" [disabled]="busy()">
+              {{ i18n.t('quotation.submit') }}
+            </button>
+            <span class="note">{{
+              i18n.t(auth.signedIn() ? 'quotation.note.signedIn' : 'quotation.note.anonymous')
+            }}</span>
           </div>
           @if (formError()) {
             <div class="box box-err" style="margin-top: 18px;">{{ formError() }}</div>
@@ -112,9 +144,9 @@ interface QuotationResult {
                 <path d="M6.4 10.3l2.6 2.6 4.8-5.2"></path>
               </svg>
               <span>
-                Votre demande a bien été envoyée. Vous recevrez votre devis détaillé par e-mail, et le
-                propriétaire vous recontactera sous 24 h. Suivez-la depuis
-                <a routerLink="/espace-client">votre espace client</a>.
+                {{ i18n.t('quotation.success.before') }}
+                <a routerLink="/espace-client">{{ i18n.t('quotation.success.link') }}</a
+                >{{ i18n.t('quotation.success.after') }}
               </span>
             </div>
           }
@@ -122,65 +154,86 @@ interface QuotationResult {
       </div>
 
       <aside class="card estimate">
-        <img src="images/kiosque.jpg" alt="Le kiosque et la piscine" class="estimate-img" />
+        <img
+          src="images/kiosque.jpg"
+          [alt]="i18n.t('quotation.estimate.imageAlt')"
+          class="estimate-img"
+        />
         @if (result(); as r) {
-          <h2 class="estimate-title">Votre devis</h2>
+          <h2 class="estimate-title">{{ i18n.t('quotation.result.title') }}</h2>
           <div class="estimate-sub">{{ resumeDates() }}</div>
           <div class="estimate-lines">
             <div class="line">
-              <span>Séjour ({{ r.nights }} nuits)</span>
-              <span class="strong">{{ euros(r.totalAmount) }}</span>
+              <span>{{ i18n.plural('quotation.result.stay', r.nights) }}</span>
+              <span class="strong">{{ i18n.euros(r.totalAmount) }}</span>
             </div>
             <div class="line">
-              <span>Forfait ménage</span>
-              <span class="strong">{{ euros(r.householdAmount) }}</span>
+              <span>{{ i18n.t('quotation.estimate.household') }}</span>
+              <span class="strong">{{ i18n.euros(r.householdAmount) }}</span>
             </div>
           </div>
           <div class="total-row">
-            <span class="total-label">Total du séjour</span>
-            <span class="total-value">{{ euros(r.totalAmount + r.householdAmount) }}</span>
+            <span class="total-label">{{ i18n.t('quotation.result.total') }}</span>
+            <span class="total-value">{{ i18n.euros(r.totalAmount + r.householdAmount) }}</span>
           </div>
           <p class="estimate-note">
-            Caution de {{ euros(r.depositAmount) }} demandée à la réservation, restituée après le séjour.
-            Taxes touristiques ({{ euros(r.unrankedTouristTax) }}) calculées dans le devis final.
+            {{
+              i18n.t('quotation.result.note', {
+                deposit: i18n.euros(r.depositAmount),
+                tax: i18n.euros(r.unrankedTouristTax),
+              })
+            }}
           </p>
         } @else {
-          <h2 class="estimate-title">Votre estimation</h2>
+          <h2 class="estimate-title">{{ i18n.t('quotation.estimate.title') }}</h2>
           <div class="estimate-sub">{{ resumeDates() }}</div>
           @if (estimate(); as est) {
             <div class="estimate-lines">
               <div class="line">
-                <span>{{ est.nights }} nuit{{ est.nights > 1 ? "s" : "" }} × {{ euros(est.nightly) }}</span>
-                <span class="strong">{{ euros(est.subtotal) }}</span>
+                <span>{{
+                  i18n.plural('quotation.estimate.nightly', est.nights, {
+                    amount: i18n.euros(est.nightly),
+                  })
+                }}</span>
+                <span class="strong">{{ i18n.euros(est.subtotal) }}</span>
               </div>
               @if (est.discountPercent > 0) {
                 <div class="line discount">
-                  <span>Remise {{ est.discountPercent }} % (séjour de {{ est.nights }} nuits)</span>
-                  <span>− {{ euros(est.discountAmount) }}</span>
+                  <span>{{
+                    i18n.plural('quotation.estimate.discount', est.nights, {
+                      percent: est.discountPercent,
+                    })
+                  }}</span>
+                  <span>− {{ i18n.euros(est.discountAmount) }}</span>
                 </div>
               }
               <div class="line">
-                <span>Forfait ménage</span>
-                <span class="strong">{{ euros(est.household) }}</span>
+                <span>{{ i18n.t('quotation.estimate.household') }}</span>
+                <span class="strong">{{ i18n.euros(est.household) }}</span>
               </div>
             </div>
             <div class="total-row">
-              <span class="total-label">Total estimé</span>
-              <span class="total-value">{{ euros(est.total) }}</span>
+              <span class="total-label">{{ i18n.t('quotation.estimate.total') }}</span>
+              <span class="total-value">{{ i18n.euros(est.total) }}</span>
             </div>
           } @else {
             <div class="estimate-lines">
-              <div class="line"><span>Séjour</span><span class="strong">—</span></div>
-              <div class="line"><span>Forfait ménage</span><span class="strong">—</span></div>
+              <div class="line">
+                <span>{{ i18n.t('quotation.estimate.stay') }}</span
+                ><span class="strong">—</span>
+              </div>
+              <div class="line">
+                <span>{{ i18n.t('quotation.estimate.household') }}</span
+                ><span class="strong">—</span>
+              </div>
             </div>
             <div class="total-row">
-              <span class="total-label">Total estimé</span>
+              <span class="total-label">{{ i18n.t('quotation.estimate.total') }}</span>
               <span class="total-value">—</span>
             </div>
           }
           <p class="estimate-note">
-            Caution de 2 000 € demandée à la réservation, restituée après le séjour. Taxes touristiques
-            calculées dans le devis final.
+            {{ i18n.t('quotation.estimate.note', { deposit: i18n.euros(2000) }) }}
           </p>
         }
       </aside>
@@ -386,127 +439,133 @@ interface QuotationResult {
   `,
 })
 export class QuotationPage {
-  readonly #route = inject(ActivatedRoute)
-  readonly #router = inject(Router)
-  readonly auth = inject(Auth)
-  readonly #bookings = inject(BookingService)
-  readonly #profiles = inject(ProfileService)
-  readonly #funnel = inject(QuoteFunnelStore)
+  readonly i18n = inject(Internationalization);
+  readonly #route = inject(ActivatedRoute);
+  readonly #router = inject(Router);
+  readonly auth = inject(Auth);
+  readonly #bookings = inject(BookingService);
+  readonly #profiles = inject(ProfileService);
+  readonly #funnel = inject(QuoteFunnelStore);
 
-  readonly arrivee = signal("")
-  readonly depart = signal("")
-  readonly voyageurs = signal("2")
-  readonly prenom = signal("")
-  readonly nom = signal("")
-  readonly email = signal("")
-  readonly tel = signal("")
-  readonly message = signal("")
+  readonly arrivee = signal('');
+  readonly depart = signal('');
+  readonly voyageurs = signal('2');
+  readonly prenom = signal('');
+  readonly nom = signal('');
+  readonly email = signal('');
+  readonly tel = signal('');
+  readonly message = signal('');
 
-  readonly availability = signal<Availability>("unknown")
-  readonly formError = signal("")
-  readonly envoye = signal(false)
-  readonly busy = signal(false)
-  readonly result = signal<QuotationResult | null>(null)
+  readonly availability = signal<Availability>('unknown');
+  readonly formError = signal('');
+  readonly envoye = signal(false);
+  readonly busy = signal(false);
+  readonly result = signal<QuotationResult | null>(null);
 
-  readonly estimate = computed(() => estimateStay(this.arrivee(), this.depart()))
-  readonly euros = euros
+  readonly estimate = computed(() => estimateStay(this.arrivee(), this.depart()));
 
-  readonly dispoVisible = computed(() => this.arrivee() !== "" && this.depart() !== "")
+  readonly dispoVisible = computed(() => this.arrivee() !== '' && this.depart() !== '');
 
-  readonly dispoOk = computed(() => this.availability() === "available")
+  readonly dispoOk = computed(() => this.availability() === 'available');
 
   readonly dispoMessage = computed(() => {
-    if (this.availability() === "invalid") {
-      return "La date de départ doit être postérieure à la date d'arrivée."
+    if (this.availability() === 'invalid') {
+      return this.i18n.t('quotation.availability.invalid');
     }
-    if (this.availability() === "unavailable") {
-      return "La villa n'est pas disponible pour ces dates. Choisissez une autre période."
+    if (this.availability() === 'unavailable') {
+      return this.i18n.t('quotation.availability.unavailable');
     }
-    const nights = nightsBetween(this.arrivee(), this.depart())
-    return `La villa est disponible du ${longDate(this.arrivee())} au ${longDate(this.depart())} · ${nights} nuit${nights > 1 ? "s" : ""}.`
-  })
+    const nights = nightsBetween(this.arrivee(), this.depart());
+    return this.i18n.plural('quotation.availability.available', nights, {
+      from: this.i18n.longDate(this.arrivee()),
+      to: this.i18n.longDate(this.depart()),
+    });
+  });
 
   readonly resumeDates = computed(() => {
-    const nights = nightsBetween(this.arrivee(), this.depart())
-    if (nights === 0) return "Sélectionnez vos dates pour voir l'estimation"
-    return `Du ${longDate(this.arrivee())} au ${longDate(this.depart())} · ${this.voyageurs()} voyageurs`
-  })
+    const nights = nightsBetween(this.arrivee(), this.depart());
+    if (nights === 0) return this.i18n.t('quotation.estimate.selectDates');
+    return this.i18n.plural('quotation.summary', Number(this.voyageurs()), {
+      from: this.i18n.longDate(this.arrivee()),
+      to: this.i18n.longDate(this.depart()),
+    });
+  });
 
   constructor() {
     // Query params (the landing handoff) render identically on server and
     // client; browser-only storages are merged after hydration instead.
-    const params = this.#route.snapshot.queryParamMap
-    this.arrivee.set(params.get("arrivee") ?? "")
-    this.depart.set(params.get("depart") ?? "")
-    const guests = params.get("voyageurs")
-    this.voyageurs.set(guests !== null && guests !== "" ? guests : "2")
+    const params = this.#route.snapshot.queryParamMap;
+    this.arrivee.set(params.get('arrivee') ?? '');
+    this.depart.set(params.get('depart') ?? '');
+    const guests = params.get('voyageurs');
+    this.voyageurs.set(guests !== null && guests !== '' ? guests : '2');
 
     afterNextRender(() => {
       const stay = fillStayGaps(
         { arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() },
         this.#funnel.stay(),
-      )
-      this.arrivee.set(stay.arrivee)
-      this.depart.set(stay.depart)
-      this.voyageurs.set(stay.voyageurs)
-      this.applyContact(this.#funnel.contact())
-      this.message.set(this.#funnel.message())
-      if (stay.arrivee !== "" && stay.depart !== "") void this.checkAvailability()
-    })
+      );
+      this.arrivee.set(stay.arrivee);
+      this.depart.set(stay.depart);
+      this.voyageurs.set(stay.voyageurs);
+      this.applyContact(this.#funnel.contact());
+      this.message.set(this.#funnel.message());
+      if (stay.arrivee !== '' && stay.depart !== '') void this.checkAvailability();
+    });
 
-    if (this.auth.signedIn()) void this.prefillFromProfile()
+    if (this.auth.signedIn()) void this.prefillFromProfile();
   }
 
   onArrivee(event: Event): void {
-    this.arrivee.set((event.target as HTMLInputElement).value)
-    this.result.set(null)
-    this.envoye.set(false)
-    this.persistStay()
-    void this.checkAvailability()
+    this.arrivee.set((event.target as HTMLInputElement).value);
+    this.result.set(null);
+    this.envoye.set(false);
+    this.persistStay();
+    void this.checkAvailability();
   }
 
   onDepart(event: Event): void {
-    this.depart.set((event.target as HTMLInputElement).value)
-    this.result.set(null)
-    this.envoye.set(false)
-    this.persistStay()
-    void this.checkAvailability()
+    this.depart.set((event.target as HTMLInputElement).value);
+    this.result.set(null);
+    this.envoye.set(false);
+    this.persistStay();
+    void this.checkAvailability();
   }
 
   onVoyageurs(event: Event): void {
-    this.voyageurs.set((event.target as HTMLSelectElement).value)
-    this.persistStay()
+    this.voyageurs.set((event.target as HTMLSelectElement).value);
+    this.persistStay();
   }
 
-  setField(key: "prenom" | "nom" | "email" | "tel" | "message", event: Event): void {
-    this[key].set((event.target as HTMLInputElement | HTMLTextAreaElement).value)
-    this.formError.set("")
-    this.persistContact()
+  setField(key: 'prenom' | 'nom' | 'email' | 'tel' | 'message', event: Event): void {
+    this[key].set((event.target as HTMLInputElement | HTMLTextAreaElement).value);
+    this.formError.set('');
+    this.persistContact();
   }
 
   async submit(): Promise<void> {
-    const nights = nightsBetween(this.arrivee(), this.depart())
+    const nights = nightsBetween(this.arrivee(), this.depart());
     if (nights === 0) {
-      this.formError.set("Indiquez vos dates d'arrivée et de départ.")
-      return
+      this.formError.set(this.i18n.t('errors.quotation.datesRequired'));
+      return;
     }
-    if (this.prenom() === "" || this.nom() === "" || this.email() === "") {
-      this.formError.set("Merci de renseigner votre prénom, nom et e-mail.")
-      return
+    if (this.prenom() === '' || this.nom() === '' || this.email() === '') {
+      this.formError.set(this.i18n.t('errors.quotation.contactRequired'));
+      return;
     }
-    if (this.availability() === "unavailable") {
-      this.formError.set("Ces dates ne sont pas disponibles. Choisissez une autre période.")
-      return
+    if (this.availability() === 'unavailable') {
+      this.formError.set(this.i18n.t('errors.quotation.unavailable'));
+      return;
     }
-    this.persistStay()
-    this.persistContact()
+    this.persistStay();
+    this.persistContact();
 
     // F1: sending the request requires an account — but nothing is lost:
     // the whole form is submitted as a server-side quotation lead, and the
     // claim at sign-in turns it into the real quotation request.
     if (!this.auth.signedIn()) {
-      this.busy.set(true)
-      this.formError.set("")
+      this.busy.set(true);
+      this.formError.set('');
       try {
         await this.#bookings.submitLead({
           email: this.email(),
@@ -518,21 +577,20 @@ export class QuotationPage {
           to: this.depart(),
           adultsCount: Number(this.voyageurs()),
           childrenCount: 0,
-          ...(this.message() !== "" ? { message: this.message() } : {}),
-        })
-        this.#funnel.markPendingLead()
-        await this.#router.navigate(["/connexion"], { queryParams: { mode: "inscription" } })
-      } catch (e) {
-        const problem = e as { problem?: { issues?: string[]; message?: string } }
-        this.formError.set(problem.problem?.issues?.[0] ?? problem.problem?.message ?? "Demande impossible.")
+          ...(this.message() !== '' ? { message: this.message() } : {}),
+        });
+        this.#funnel.markPendingLead();
+        await this.#router.navigate(['/connexion'], { queryParams: { mode: 'inscription' } });
+      } catch (cause) {
+        this.formError.set(this.i18n.error(cause, 'errors.quotation.request'));
       } finally {
-        this.busy.set(false)
+        this.busy.set(false);
       }
-      return
+      return;
     }
 
-    this.busy.set(true)
-    this.formError.set("")
+    this.busy.set(true);
+    this.formError.set('');
     try {
       // Keep the profile fresh with the contact details used for the request.
       try {
@@ -541,7 +599,7 @@ export class QuotationPage {
           firstname: this.prenom(),
           lastname: this.nom(),
           phoneNumber: this.tel(),
-        })
+        });
       } catch {
         // A stale profile must not block the quotation itself.
       }
@@ -551,35 +609,34 @@ export class QuotationPage {
         to: this.depart(),
         adultsCount: Number(this.voyageurs()),
         childrenCount: 0,
-        ...(this.message() !== "" ? { message: this.message() } : {}),
-      })
+        ...(this.message() !== '' ? { message: this.message() } : {}),
+      });
       this.result.set({
         nights,
-        totalAmount: response.pricing["totalAmount"] ?? 0,
-        unrankedTouristTax: response.pricing["unrankedTouristTax"] ?? 0,
-        depositAmount: response.pricing["depositAmount"] ?? 0,
-        householdAmount: response.pricing["householdAmount"] ?? 0,
-      })
-      this.envoye.set(true)
-    } catch (e) {
-      const problem = e as { problem?: { issues?: string[]; message?: string } }
-      this.formError.set(problem.problem?.issues?.[0] ?? problem.problem?.message ?? "Demande impossible.")
+        totalAmount: response.pricing['totalAmount'] ?? 0,
+        unrankedTouristTax: response.pricing['unrankedTouristTax'] ?? 0,
+        depositAmount: response.pricing['depositAmount'] ?? 0,
+        householdAmount: response.pricing['householdAmount'] ?? 0,
+      });
+      this.envoye.set(true);
+    } catch (cause) {
+      this.formError.set(this.i18n.error(cause, 'errors.quotation.request'));
     } finally {
-      this.busy.set(false)
+      this.busy.set(false);
     }
   }
 
   /** Profile fills the gaps only — the visitor's own latest input wins. */
   private async prefillFromProfile(): Promise<void> {
     try {
-      const { profile } = await this.#profiles.get()
+      const { profile } = await this.#profiles.get();
       if (profile !== null) {
         this.applyContact({
           prenom: profile.firstname || undefined,
           nom: profile.lastname || undefined,
           email: profile.email || undefined,
           tel: profile.phoneNumber || undefined,
-        })
+        });
       }
     } catch {
       // No profile yet (or offline): keep whatever the storages restored.
@@ -591,42 +648,48 @@ export class QuotationPage {
     const merged = fillContactGaps(
       { prenom: this.prenom(), nom: this.nom(), email: this.email(), tel: this.tel() },
       source,
-    )
-    this.prenom.set(merged.prenom)
-    this.nom.set(merged.nom)
-    this.email.set(merged.email)
-    this.tel.set(merged.tel)
+    );
+    this.prenom.set(merged.prenom);
+    this.nom.set(merged.nom);
+    this.email.set(merged.email);
+    this.tel.set(merged.tel);
   }
 
   private persistStay(): void {
-    this.#funnel.patchStay({ arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() })
+    this.#funnel.patchStay({
+      arrivee: this.arrivee(),
+      depart: this.depart(),
+      voyageurs: this.voyageurs(),
+    });
   }
 
   private persistContact(): void {
-    this.#funnel.patchContact({ prenom: this.prenom(), nom: this.nom(), email: this.email(), tel: this.tel() })
-    this.#funnel.setMessage(this.message())
+    this.#funnel.patchContact({
+      prenom: this.prenom(),
+      nom: this.nom(),
+      email: this.email(),
+      tel: this.tel(),
+    });
+    this.#funnel.setMessage(this.message());
   }
 
   private async checkAvailability(): Promise<void> {
-    const from = this.arrivee()
-    const to = this.depart()
-    if (from === "" || to === "") {
-      this.availability.set("unknown")
-      return
+    const from = this.arrivee();
+    const to = this.depart();
+    if (from === '' || to === '') {
+      this.availability.set('unknown');
+      return;
     }
     if (nightsBetween(from, to) === 0) {
-      this.availability.set("invalid")
-      return
+      this.availability.set('invalid');
+      return;
     }
-    this.availability.set("checking")
+    this.availability.set('checking');
     try {
-      const { available } = await this.#bookings.checkAvailability(VILLA_ID, from, to)
-      this.availability.set(available ? "available" : "unavailable")
+      const { available } = await this.#bookings.checkAvailability(VILLA_ID, from, to);
+      this.availability.set(available ? 'available' : 'unavailable');
     } catch {
-      this.availability.set("unknown")
+      this.availability.set('unknown');
     }
   }
 }
-
-const longDate = (isoDay: string): string =>
-  new Date(`${isoDay}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })

@@ -1,63 +1,102 @@
-import { Component, HostListener, computed, signal } from "@angular/core"
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Internationalization } from '../core/internationalization';
+import type { TextTranslationKey } from '../core/translations/fr';
+
+type GalleryCategory = 'all' | 'outside' | 'pool' | 'living' | 'bedrooms' | 'bathrooms';
 
 interface GalleryPhoto {
-  readonly src: string
-  readonly cat: string
-  readonly caption: string
+  readonly src: string;
+  readonly category: Exclude<GalleryCategory, 'all'>;
+  readonly captionKey: TextTranslationKey;
 }
 
-const CATEGORIES = ["Tout", "Extérieurs", "Piscine", "Pièces à vivre", "Chambres", "Salles de bain"] as const
+const CATEGORIES: readonly {
+  readonly id: GalleryCategory;
+  readonly labelKey: TextTranslationKey;
+}[] = [
+  { id: 'all', labelKey: 'gallery.categories.all' },
+  { id: 'outside', labelKey: 'gallery.categories.outside' },
+  { id: 'pool', labelKey: 'gallery.categories.pool' },
+  { id: 'living', labelKey: 'gallery.categories.living' },
+  { id: 'bedrooms', labelKey: 'gallery.categories.bedrooms' },
+  { id: 'bathrooms', labelKey: 'gallery.categories.bathrooms' },
+];
 
 const PHOTOS: readonly GalleryPhoto[] = [
-  { src: "images/vue-globale.jpg", cat: "Extérieurs", caption: "La villa et sa piscine" },
-  { src: "images/villa-jardin.jpg", cat: "Extérieurs", caption: "La villa côté jardin" },
-  { src: "images/piscine-carbet.jpg", cat: "Piscine", caption: "La piscine et son carbet" },
-  { src: "images/deck-piscine.jpg", cat: "Piscine", caption: "Le deck de la piscine" },
-  { src: "images/vue-mer-deck.jpg", cat: "Piscine", caption: "Vue sur la mer depuis le deck" },
-  { src: "images/eau-claire.jpg", cat: "Piscine", caption: "Eau claire, fond en pierre naturelle" },
-  { src: "images/piscine-terrasse.jpg", cat: "Piscine", caption: "La piscine au pied de la terrasse" },
-  { src: "images/hamac-carbet.jpg", cat: "Piscine", caption: "Hamac sous le carbet" },
-  { src: "images/terrasse-couverte.jpg", cat: "Extérieurs", caption: "La terrasse couverte" },
-  { src: "images/balcon-etage.jpg", cat: "Extérieurs", caption: "Le balcon de l'étage" },
-  { src: "images/kiosque.jpg", cat: "Extérieurs", caption: "Le kiosque au fond du jardin" },
-  { src: "images/jardin-bougainvilliers.jpg", cat: "Extérieurs", caption: "Le jardin et ses bougainvilliers" },
-  { src: "images/douche-exterieure.jpg", cat: "Extérieurs", caption: "La douche extérieure en pierre" },
-  { src: "images/plancha-jardin.jpg", cat: "Extérieurs", caption: "La plancha côté jardin" },
-  { src: "images/carport-entree.jpg", cat: "Extérieurs", caption: "Le carport et l'entrée" },
-  { src: "images/salon-interieur.jpg", cat: "Pièces à vivre", caption: "Le salon ouvert sur la terrasse" },
-  { src: "images/salon.jpg", cat: "Pièces à vivre", caption: "Le salon" },
-  { src: "images/cuisine.jpg", cat: "Pièces à vivre", caption: "La cuisine équipée" },
-  { src: "images/passe-plat.jpg", cat: "Pièces à vivre", caption: "Le passe-plat du petit-déjeuner" },
-  { src: "images/chambre-1.jpg", cat: "Chambres", caption: "Chambre 1" },
-  { src: "images/chambre-3.jpg", cat: "Chambres", caption: "Chambre 3, ouverte sur le balcon" },
-  { src: "images/chambre-2.jpg", cat: "Chambres", caption: "Chambre 2, lits superposés" },
-  { src: "images/salle-de-bain-1.jpg", cat: "Salles de bain", caption: "Salle de bain 1" },
-  { src: "images/salle-de-bain-2.jpg", cat: "Salles de bain", caption: "Salle de bain 2" },
-]
+  { src: 'images/vue-globale.jpg', category: 'outside', captionKey: 'gallery.photos.overview' },
+  { src: 'images/villa-jardin.jpg', category: 'outside', captionKey: 'gallery.photos.gardenVilla' },
+  { src: 'images/piscine-carbet.jpg', category: 'pool', captionKey: 'gallery.photos.poolCarbet' },
+  { src: 'images/deck-piscine.jpg', category: 'pool', captionKey: 'gallery.photos.poolDeck' },
+  { src: 'images/vue-mer-deck.jpg', category: 'pool', captionKey: 'gallery.photos.seaView' },
+  { src: 'images/eau-claire.jpg', category: 'pool', captionKey: 'gallery.photos.clearWater' },
+  {
+    src: 'images/piscine-terrasse.jpg',
+    category: 'pool',
+    captionKey: 'gallery.photos.poolTerrace',
+  },
+  { src: 'images/hamac-carbet.jpg', category: 'pool', captionKey: 'gallery.photos.hammock' },
+  {
+    src: 'images/terrasse-couverte.jpg',
+    category: 'outside',
+    captionKey: 'gallery.photos.coveredTerrace',
+  },
+  { src: 'images/balcon-etage.jpg', category: 'outside', captionKey: 'gallery.photos.balcony' },
+  { src: 'images/kiosque.jpg', category: 'outside', captionKey: 'gallery.photos.kiosk' },
+  {
+    src: 'images/jardin-bougainvilliers.jpg',
+    category: 'outside',
+    captionKey: 'gallery.photos.bougainvillea',
+  },
+  {
+    src: 'images/douche-exterieure.jpg',
+    category: 'outside',
+    captionKey: 'gallery.photos.outdoorShower',
+  },
+  { src: 'images/plancha-jardin.jpg', category: 'outside', captionKey: 'gallery.photos.plancha' },
+  { src: 'images/carport-entree.jpg', category: 'outside', captionKey: 'gallery.photos.carport' },
+  {
+    src: 'images/salon-interieur.jpg',
+    category: 'living',
+    captionKey: 'gallery.photos.openLivingRoom',
+  },
+  { src: 'images/salon.jpg', category: 'living', captionKey: 'gallery.photos.livingRoom' },
+  { src: 'images/cuisine.jpg', category: 'living', captionKey: 'gallery.photos.kitchen' },
+  { src: 'images/passe-plat.jpg', category: 'living', captionKey: 'gallery.photos.breakfastHatch' },
+  { src: 'images/chambre-1.jpg', category: 'bedrooms', captionKey: 'gallery.photos.bedroom1' },
+  { src: 'images/chambre-3.jpg', category: 'bedrooms', captionKey: 'gallery.photos.bedroom3' },
+  { src: 'images/chambre-2.jpg', category: 'bedrooms', captionKey: 'gallery.photos.bedroom2' },
+  {
+    src: 'images/salle-de-bain-1.jpg',
+    category: 'bathrooms',
+    captionKey: 'gallery.photos.bathroom1',
+  },
+  {
+    src: 'images/salle-de-bain-2.jpg',
+    category: 'bathrooms',
+    captionKey: 'gallery.photos.bathroom2',
+  },
+];
 
 /** The photo gallery: category filters, masonry grid and a lightbox. */
 @Component({
-  selector: "app-gallery",
+  selector: 'app-gallery',
   imports: [],
   template: `
     <section class="container intro">
-      <div class="kicker">GALERIE</div>
-      <h1 class="title">La villa en images</h1>
-      <p class="text">
-        Jardin, piscine, terrasses et chambres : un aperçu fidèle de la maison telle que vous la
-        trouverez à votre arrivée.
-      </p>
+      <div class="kicker">{{ i18n.t('gallery.kicker') }}</div>
+      <h1 class="title">{{ i18n.t('gallery.title') }}</h1>
+      <p class="text">{{ i18n.t('gallery.intro') }}</p>
     </section>
 
     <section class="container filters">
-      @for (cat of categories; track cat) {
+      @for (cat of categories; track cat.id) {
         <button
           type="button"
           class="pill"
-          [class.active]="filtre() === cat"
-          (click)="setFiltre(cat)"
+          [class.active]="filtre() === cat.id"
+          (click)="setFiltre(cat.id)"
         >
-          {{ cat }}
+          {{ i18n.t(cat.labelKey) }}
         </button>
       }
     </section>
@@ -65,7 +104,7 @@ const PHOTOS: readonly GalleryPhoto[] = [
     <section class="container grid">
       @for (photo of visible(); track photo.src; let i = $index) {
         <figure class="photo" (click)="open(i)">
-          <img [src]="photo.src" [alt]="photo.caption" loading="lazy" />
+          <img [src]="photo.src" [alt]="i18n.t(photo.captionKey)" loading="lazy" />
         </figure>
       }
     </section>
@@ -75,25 +114,36 @@ const PHOTOS: readonly GalleryPhoto[] = [
         <div
           class="lightbox-image"
           role="img"
-          [attr.aria-label]="photo.caption"
+          [attr.aria-label]="i18n.t(photo.captionKey)"
           [style.background-image]="'url(' + photo.src + ')'"
         ></div>
         <div class="lightbox-caption">
-          {{ photo.caption }} · {{ index() + 1 }} / {{ visible().length }}
+          {{ i18n.t(photo.captionKey) }} · {{ index() + 1 }} / {{ visible().length }}
         </div>
-        <button type="button" class="lightbox-close" aria-label="Fermer" (click)="close()">✕</button>
+        <button
+          type="button"
+          class="lightbox-close"
+          [attr.aria-label]="i18n.t('gallery.actions.close')"
+          (click)="close()"
+        >
+          ✕
+        </button>
         <button
           type="button"
           class="lightbox-nav lightbox-prev"
-          aria-label="Photo précédente"
+          [attr.aria-label]="i18n.t('gallery.actions.previous')"
           (click)="prev($event)"
-        >‹</button>
+        >
+          ‹
+        </button>
         <button
           type="button"
           class="lightbox-nav lightbox-next"
-          aria-label="Photo suivante"
+          [attr.aria-label]="i18n.t('gallery.actions.next')"
           (click)="next($event)"
-        >›</button>
+        >
+          ›
+        </button>
       </div>
     }
   `,
@@ -242,53 +292,54 @@ const PHOTOS: readonly GalleryPhoto[] = [
   `,
 })
 export class GalleryPage {
-  readonly categories = CATEGORIES
-  readonly filtre = signal<string>("Tout")
-  readonly index = signal(-1)
+  readonly i18n = inject(Internationalization);
+  readonly categories = CATEGORIES;
+  readonly filtre = signal<GalleryCategory>('all');
+  readonly index = signal(-1);
 
   readonly visible = computed(() => {
-    const filtre = this.filtre()
-    return filtre === "Tout" ? PHOTOS : PHOTOS.filter((photo) => photo.cat === filtre)
-  })
+    const filtre = this.filtre();
+    return filtre === 'all' ? PHOTOS : PHOTOS.filter((photo) => photo.category === filtre);
+  });
 
   readonly current = computed(() => {
-    const i = this.index()
-    return i >= 0 ? (this.visible()[i] ?? null) : null
-  })
+    const i = this.index();
+    return i >= 0 ? (this.visible()[i] ?? null) : null;
+  });
 
-  @HostListener("document:keydown", ["$event"])
+  @HostListener('document:keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
-    if (this.index() < 0) return
-    if (event.key === "Escape") this.index.set(-1)
-    if (event.key === "ArrowLeft") this.step(-1)
-    if (event.key === "ArrowRight") this.step(1)
+    if (this.index() < 0) return;
+    if (event.key === 'Escape') this.index.set(-1);
+    if (event.key === 'ArrowLeft') this.step(-1);
+    if (event.key === 'ArrowRight') this.step(1);
   }
 
-  setFiltre(cat: string): void {
-    this.filtre.set(cat)
-    this.index.set(-1)
+  setFiltre(cat: GalleryCategory): void {
+    this.filtre.set(cat);
+    this.index.set(-1);
   }
 
   open(i: number): void {
-    this.index.set(i)
+    this.index.set(i);
   }
 
   close(): void {
-    this.index.set(-1)
+    this.index.set(-1);
   }
 
   prev(event: MouseEvent): void {
-    event.stopPropagation()
-    this.step(-1)
+    event.stopPropagation();
+    this.step(-1);
   }
 
   next(event: MouseEvent): void {
-    event.stopPropagation()
-    this.step(1)
+    event.stopPropagation();
+    this.step(1);
   }
 
   private step(delta: number): void {
-    const total = this.visible().length
-    this.index.set((this.index() + delta + total) % total)
+    const total = this.visible().length;
+    this.index.set((this.index() + delta + total) % total);
   }
 }
