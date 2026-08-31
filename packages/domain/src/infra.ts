@@ -78,6 +78,10 @@ export class QuotationPdf extends Context.Tag("pointesavanne/QuotationPdf")<Quot
 
 export const quotationPath = (bookingId: string): string => `booking/${bookingId}/devis.pdf`
 
+/** Where a customer's signed quotation upload lives. */
+export const signedDocumentPath = (bookingId: string, fileName: string): string =>
+  `booking/${bookingId}/signed/${fileName}`
+
 /**
  * Default adapter: renders the quotation document as HTML (the legacy
  * dompdf pipeline's input); byte-true PDF rendering swaps in behind the

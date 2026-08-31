@@ -94,7 +94,7 @@ interface DocumentRow {
                 @if (b.pdfPath) {
                   <a
                     class="btn btn-outline btn-sm"
-                    [href]="b.pdfPath"
+                    [href]="quotationHref(b.bookingId)"
                     target="_blank"
                     rel="noopener"
                   >
@@ -573,6 +573,11 @@ export class CustomerAreaPage {
     return this.i18n.t('errors.quotation.claim');
   });
 
+  /** The API endpoint serving the generated devis (not the raw file-store path). */
+  quotationHref(bookingId: string): string {
+    return `/bookings/${bookingId}/quotation`;
+  }
+
   readonly documents = computed<DocumentRow[]>(() => {
     const rows: DocumentRow[] = [];
     for (const b of this.bookings()) {
@@ -584,7 +589,7 @@ export class CustomerAreaPage {
           badge: this.i18n.t('customer.documents.quote.badge'),
           badgeBg: '#E7EEF7',
           badgeColor: '#2C517E',
-          href: b.pdfPath,
+          href: this.quotationHref(b.bookingId),
         });
       }
       if (b.signedFileName !== undefined) {

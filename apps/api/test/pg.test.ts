@@ -4,6 +4,9 @@ import { layer as esPg } from "@structure-ai/eventsourcing-pg"
 import { makeAuthStore, migrate as migrateAuthPg } from "@structure-ai/auth-pg"
 import * as Migrations from "@structure-ai/migrations"
 import { PgClient } from "@effect/sql-pg"
+import { CommandBus } from "@structure-ai/cqrs"
+import { Principal } from "@structure-ai/authorization"
+import { Readiness, Shutdown } from "@structure-ai/runtime"
 import { SQL } from "bun"
 import { Effect, Exit, Layer, Redacted, Scope } from "effect"
 import {
@@ -16,9 +19,13 @@ import {
   DomainConfigTag,
   isVillaAvailable,
   Mailer,
+  quotationPath,
+  RequestQuotation,
+  runWorkersOnce,
 } from "@pointesavanne/domain"
 import { ViewStore } from "@structure-ai/viewmodel"
 import { bookkeepingTable, prodMigrations } from "../src/migrations.ts"
+import { productionLayers } from "../src/app.ts"
 
 /**
  * Durable-adapter integration against PostgreSQL. Skipped unless
@@ -136,4 +143,77 @@ maybe("postgres adapters", () => {
     )
     expect((found as { id?: string } | null)?.id).toBe("pg-user-1")
   })
+
+  /**
+   * The production composition itself: builds `productionLayers` (real
+   * migrations, pg stores, console mailer, local files, http on an
+   * ephemeral port) and proves the worker loop runs there — the quotation
+   * generator renders the devis into the file store and the notifications
+   * projection drains without a missing-service defect. Regression test for
+   * the wiring bug where those services were hidden behind a plain
+   * `Layer.provide` and the workers' fibers died silently.
+   */
+  test("production wiring: the worker loop generates the quotation pdf", async () => {
+    const filesDir = `./var/pg-wiring-test-${Date.now().toString(36)}`
+    const probe = Bun.listen({
+      hostname: "127.0.0.1",
+      port: 0,
+      socket: { data: () => {}, open: () => {}, close: () => {} },
+    })
+    const httpPort = String(probe.port)
+    probe.stop(true)
+    // Real environment wins over dotenv in settings, so pin the process env
+    // for the layer build: ephemeral http port, scratch file store, and the
+    // required settings CI does not set (LOG_LEVEL, ADMIN_MAIL).
+    const keys = ["HTTP_PORT", "FILES_DIR", "LOG_LEVEL", "ADMIN_MAIL"] as const
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+    process.env.HTTP_PORT = httpPort
+    process.env.FILES_DIR = filesDir
+    process.env.LOG_LEVEL ??= "warn"
+    process.env.ADMIN_MAIL ??= "wiring@test.pointesavanne"
+    const scope = Effect.runSync(Scope.make())
+    try {
+      // The exact stack launch() builds: production layers plus the runtime
+      // members (shutdown, readiness) it merges in.
+      const processLayers = Layer.mergeAll(productionLayers, Shutdown.layer()).pipe(
+        Layer.provideMerge(Readiness.layer),
+      )
+      const context = await Effect.runPromise(Layer.buildWithScope(processLayers, scope))
+      const quotation = (await Effect.runPromise(
+        Effect.gen(function* () {
+          const bus = yield* CommandBus
+          return yield* Principal.within({ id: "wiring-test-customer", roles: ["customer"], kind: "user" })(
+            bus.dispatch(RequestQuotation, {
+              villaId: defaultVilla.villaId,
+              from: "2026-11-02",
+              to: "2026-11-09",
+              adultsCount: 2,
+            }),
+          )
+        }).pipe(Effect.provide(Layer.succeedContext(context)) as never),
+      )) as { bookingId: string; status: string }
+      expect(quotation.status).toBe("quotation-requested")
+
+      // The worker loop the process forks (view hydration, notifications,
+      // quotation generator) drains over the production context.
+      await Effect.runPromise(
+        Effect.provide(runWorkersOnce as never, Layer.succeedContext(context)),
+      )
+
+      // The generator wrote the devis through the local file store.
+      const pdf = `${filesDir}/${quotationPath(quotation.bookingId)}`
+      expect(await Bun.file(pdf).exists()).toBe(true)
+    } finally {
+      await Effect.runPromise(Scope.close(scope, Exit.void)).catch(() => undefined)
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key]
+        else process.env[key] = previous[key]
+      }
+      // productionLayers migrates the auth schema under its default prefix.
+      for (const table of ["auth_users", "auth_passwords", "auth_tokens", "auth_sessions", "auth_oauth_states", "auth_oauth_identities", "auth_passkey_challenges", "auth_passkeys"]) {
+        await cleanupSql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`).catch(() => undefined)
+      }
+      await cleanupSql.unsafe(`DELETE FROM es_events WHERE stream_id LIKE 'booking:%'`).catch(() => undefined)
+    }
+  }, 20000)
 })

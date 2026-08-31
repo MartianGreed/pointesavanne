@@ -87,17 +87,24 @@ const HttpLive = Layer.unwrapEffect(
  * launch). Members of a `Layer.mergeAll` do not see each other, so the stack
  * is one provide chain in dependency order — http → api → buses → ports →
  * auth → event store → migrations → postgres → telemetry → config.
+ *
+ * `provideMerge` (not `provide`) for the buses, the ports and the domain
+ * config: their services must land in the process context too, because the
+ * projection workers main.ts forks (notifications, quotation generator)
+ * consume the Mailer, the CommandBus and DomainConfigTag directly — with a
+ * plain `provide` those fibers die on a missing service and the PDF/e-mail
+ * pipeline silently stops.
  */
 export const productionLayers = HttpLive.pipe(
   Layer.provide(Docs.layer()),
   Layer.provide(ApiWithMiddleware),
-  Layer.provide(BusesLive),
+  Layer.provideMerge(BusesLive),
   Layer.provide(AppAuthPg),
-  Layer.provide(PortsLive),
+  Layer.provideMerge(PortsLive),
   Layer.provide(MigrationsLive),
   Layer.provideMerge(EventSourcingLive),
   Layer.provideMerge(PgLive),
   Layer.provide(ObservabilityLive),
-  Layer.provide(DomainConfigLive),
+  Layer.provideMerge(DomainConfigLive),
   Layer.provide(ApiConfigLive),
 )

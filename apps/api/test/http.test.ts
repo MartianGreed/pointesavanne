@@ -534,6 +534,174 @@ describe("pricing (the owner's rate card)", () => {
   })
 })
 
+describe("quotation documents", () => {
+  // Registers, verifies and signs in; returns the session cookie.
+  const signInAs = async (email: string, password: string): Promise<string> => {
+    await json("POST", "/auth/register/password", { email, password })
+    const verification = authEmails.find((mail) => mail.kind === "email-verification" && mail.to === email)
+    expect(verification).toBeDefined()
+    await json("POST", "/auth/verify-email", { token: verification!.token })
+    const signedIn = await json("POST", "/auth/sign-in/password", { email, password })
+    expect(signedIn.status).toBe(200)
+    return signedIn.headers.get("set-cookie")!.split(";")[0]!
+  }
+
+  test("the generated devis downloads for its customer and the owner, and is denied to others", async () => {
+    const cookie = await signInAs("documents@example.com", "long-documents-password-1")
+    const requested = await json(
+      "POST",
+      "/bookings/quotation",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2023-05-07",
+        to: "2023-05-20",
+        adultsCount: 4,
+        childrenCount: 2,
+      },
+      cookie,
+    )
+    expect(requested.status).toBe(200)
+    const { bookingId } = (await requested.json()) as { bookingId: string }
+
+    // The worker loop generates the quotation (file + view row).
+    await runWorkers()
+    expect(files.get(`booking/${bookingId}/devis.pdf`)).toBeDefined()
+
+    // The customer downloads their devis — the endpoint the customer area
+    // and the notification email point at.
+    const own = await json("GET", `/bookings/${bookingId}/quotation`, undefined, cookie)
+    expect(own.status).toBe(200)
+    expect(await own.text()).toBe(`devis:${bookingId}`)
+    // The current renderer emits the legacy dompdf HTML input, served inline.
+    expect(own.headers.get("content-type")).toContain("text/html")
+
+    // The owner reads every booking's devis.
+    const ownerCookie = await signInAs("owner@pointesavanne.test", "long-owner-password")
+    const asOwner = await json("GET", `/bookings/${bookingId}/quotation`, undefined, ownerCookie)
+    expect(asOwner.status).toBe(200)
+
+    // Another customer is denied at the row level (typed 422).
+    const otherCookie = await signInAs("other-documents@example.com", "long-other-password-1")
+    const denied = await json("GET", `/bookings/${bookingId}/quotation`, undefined, otherCookie)
+    expect(denied.status).toBe(422)
+    expect(((await denied.json()) as { _tag: string })._tag).toBe("PermissionDenied")
+
+    // Anonymous access is denied at the bus (403).
+    const anonymous = await json("GET", `/bookings/${bookingId}/quotation`)
+    expect(anonymous.status).toBe(403)
+
+    // An unknown booking is a typed NotFound.
+    const unknown = await json("GET", "/bookings/does-not-exist/quotation", undefined, cookie)
+    expect(unknown.status).toBe(422)
+    expect(((await unknown.json()) as { _tag: string })._tag).toBe("NotFound")
+  })
+
+  test("the signed document downloads for the owner once uploaded", async () => {
+    const cookie = await signInAs("signed@example.com", "long-signed-password-1")
+    const requested = await json(
+      "POST",
+      "/bookings/quotation",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2023-06-05",
+        to: "2023-06-19",
+        adultsCount: 2,
+      },
+      cookie,
+    )
+    const { bookingId } = (await requested.json()) as { bookingId: string }
+    await runWorkers()
+
+    // Nothing uploaded yet: the document endpoint answers 404.
+    const missing = await json("GET", `/bookings/${bookingId}/signed-document`, undefined, cookie)
+    expect(missing.status).toBe(404)
+
+    // The customer signs and uploads.
+    const uploaded = await json(
+      "POST",
+      `/bookings/${bookingId}/signed-document`,
+      {
+        fileName: "signed-quotation.pdf",
+        contentBase64: Buffer.from("%PDF-signed-document").toString("base64"),
+      },
+      cookie,
+    )
+    expect(uploaded.status).toBe(200)
+    expect(((await uploaded.json()) as { status: string }).status).toBe("quotation-signed")
+
+    // The worker loop hydrates the view row (signedFileName) the owner's
+    // download reads — and notifies the admin of the signed quotation.
+    await runWorkers()
+
+    // The owner downloads what was announced in the notification email.
+    const ownerCookie = await signInAs("owner@pointesavanne.test", "long-owner-password")
+    const asOwner = await json("GET", `/bookings/${bookingId}/signed-document`, undefined, ownerCookie)
+    expect(asOwner.status).toBe(200)
+    expect(await asOwner.text()).toBe("%PDF-signed-document")
+    expect(asOwner.headers.get("content-type")).toContain("application/pdf")
+  })
+
+  test("the owner's validation outcome reaches the customer by email", async () => {
+    const cookie = await signInAs("validated@example.com", "long-validated-password")
+    // The client registration flow saves the profile the notifications read.
+    const profileSaved = await json(
+      "POST",
+      "/customers/profile",
+      {
+        email: "validated@example.com",
+        firstname: "Valérie",
+        lastname: "Datier",
+        phoneNumber: "0782848227",
+      },
+      cookie,
+    )
+    expect(profileSaved.status).toBe(200)
+    const requested = await json(
+      "POST",
+      "/bookings/quotation",
+      {
+        villaId: "villa-de-standing-pointe-savanne",
+        from: "2023-07-02",
+        to: "2023-07-16",
+        adultsCount: 2,
+      },
+      cookie,
+    )
+    const { bookingId } = (await requested.json()) as { bookingId: string }
+    await runWorkers()
+    await json(
+      "POST",
+      `/bookings/${bookingId}/signed-document`,
+      {
+        fileName: "signed-quotation.pdf",
+        contentBase64: Buffer.from("%PDF-signed-document").toString("base64"),
+      },
+      cookie,
+    )
+
+    const ownerCookie = await signInAs("owner@pointesavanne.test", "long-owner-password")
+    const before = mails.length
+    const validated = await json(
+      "POST",
+      `/bookings/${bookingId}/validation`,
+      { accepted: true },
+      ownerCookie,
+    )
+    expect(validated.status).toBe(200)
+    expect(((await validated.json()) as { status: string }).status).toBe("contract-sent")
+    await runWorkers()
+
+    const since = mails.slice(before)
+    // (the deferred devis-ready notice may drain here too — assert the
+    // validation confirmation itself)
+    const confirmations = since.filter(
+      (mail) => mail.to === "validated@example.com" && mail.subject.includes("confirmée"),
+    )
+    expect(confirmations.length).toBe(1)
+    expect(confirmations[0]!.body).toContain("validé")
+  })
+})
+
 describe("health and docs", () => {
   test("/health/live answers, /openapi.json documents the api", async () => {
     const live = await json("GET", "/health/live")

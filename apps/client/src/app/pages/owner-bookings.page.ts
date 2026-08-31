@@ -83,6 +83,16 @@ interface StatCard {
                   {{ i18n.t('owner.actions.reject') }}
                 </button>
               }
+              @if (b.signedFileName) {
+                <a
+                  class="btn btn-outline btn-xs"
+                  [href]="signedDocumentHref(b.bookingId)"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  {{ i18n.t('owner.actions.signedDocument') }}
+                </a>
+              }
               @if (b.status === 'quotation-awaiting-acceptation') {
                 <button type="button" class="btn btn-outline btn-xs" (click)="relancer(b)">
                   {{ i18n.t('owner.actions.remind') }}
@@ -446,5 +456,10 @@ export class OwnerBookingsPage {
         bookingId: booking.bookingId,
       }),
     );
+  }
+
+  /** The API endpoint serving the customer's uploaded signed quotation. */
+  signedDocumentHref(bookingId: string): string {
+    return `/bookings/${bookingId}/signed-document`;
   }
 }

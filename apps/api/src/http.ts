@@ -7,6 +7,7 @@ import {
   Docs,
   Health,
   HttpCqrs,
+  NotFoundProblem,
   UnauthorizedProblem,
   withDefaultErrors,
 } from "@structure-ai/http"
@@ -37,7 +38,9 @@ import {
   SubmitQuotationLead,
   ValidateQuotation,
   policy,
+  quotationPath,
   resolvePrincipal,
+  signedDocumentPath,
 } from "@pointesavanne/domain"
 import { Authorization, Principal } from "@structure-ai/authorization"
 
@@ -99,6 +102,27 @@ const bookings = ApiGroup.make("bookings")
       .addError(businessFailure(SignQuotation.failure!))
       .pipe(withDefaultErrors),
   )
+  // The generated devis and the uploaded signed document, streamed from the
+  // file store — the downloads the notification emails and the customer
+  // area point at. Authorization rides the GetBooking query below.
+  .add(
+    ApiEndpoint.get("downloadQuotation")`/bookings/${ApiSchema.param("bookingId", Schema.String)}/quotation`
+      .addSuccess(
+        HttpApiSchema.Uint8Array({ contentType: "application/pdf" }),
+      )
+      .addError(businessFailure(GetBooking.failure!))
+      .pipe(withDefaultErrors),
+  )
+  .add(
+    ApiEndpoint.get(
+      "downloadSignedQuotation",
+    )`/bookings/${ApiSchema.param("bookingId", Schema.String)}/signed-document`
+      .addSuccess(
+        HttpApiSchema.Uint8Array({ contentType: "application/pdf" }),
+      )
+      .addError(businessFailure(GetBooking.failure!))
+      .pipe(withDefaultErrors),
+  )
 
 const customers = ApiGroup.make("customers")
   .add(HttpCqrs.commandEndpoint("saveProfile", "/customers/profile", SaveProfile))
@@ -137,6 +161,25 @@ export const appApi = Api.make("pointesavanne")
 
 const base64 = (encoded: string): Uint8Array => new Uint8Array(Buffer.from(encoded, "base64"))
 
+/**
+ * Streams a stored document. The quotation is currently rendered as HTML
+ * (the legacy dompdf input — byte-true PDFs swap in behind the port), so the
+ * content type is sniffed: real PDFs download as PDFs, the HTML interim
+ * renders inline instead of serving a broken .pdf download.
+ */
+const documentResponse = (content: Uint8Array, fileName: string): HttpServerResponse.HttpServerResponse => {
+  const isPdf =
+    content.length >= 4 &&
+    content[0] === 0x25 && // %
+    content[1] === 0x50 && // P
+    content[2] === 0x44 && // D
+    content[3] === 0x46 // F
+  return HttpServerResponse.uint8Array(content, {
+    contentType: isPdf ? "application/pdf" : "text/html",
+    headers: { "content-disposition": `inline; filename="${fileName}"` },
+  })
+}
+
 const BookingsLive = HttpApiBuilder.group(appApi, "bookings", (handlers) =>
   handlers
     .handle("requestQuotation", HttpCqrs.command(RequestQuotation))
@@ -174,11 +217,56 @@ const BookingsLive = HttpApiBuilder.group(appApi, "bookings", (handlers) =>
     .handle("uploadSignedQuotation", ({ path, payload, request }) =>
       Effect.gen(function* () {
         const files = yield* FileStore
-        yield* files.save(`booking/${path.bookingId}/signed/${payload.fileName}`, base64(payload.contentBase64))
+        yield* files.save(signedDocumentPath(path.bookingId, payload.fileName), base64(payload.contentBase64))
         return yield* HttpCqrs.command(SignQuotation)({
           payload: { bookingId: path.bookingId, fileName: payload.fileName },
           request,
         })
+      }),
+    )
+    .handleRaw("downloadQuotation", ({ path, request }) =>
+      Effect.gen(function* () {
+        // Row-level authorization rides the booking query (the owner reads
+        // everything, a customer their own) — the same rule as GET /bookings/:id.
+        const row = yield* HttpCqrs.query(GetBooking)({ payload: { bookingId: path.bookingId }, request })
+        const files = yield* FileStore
+        const content = yield* files.read(row.pdfPath ?? quotationPath(path.bookingId)).pipe(
+          Effect.catchTag("FileNotFound", () =>
+            Effect.fail(
+              new NotFoundProblem({
+                error: "NotFound",
+                message: `no quotation generated for booking ${path.bookingId}`,
+              }),
+            ),
+          ),
+        )
+        return documentResponse(content, "devis.pdf")
+      }),
+    )
+    .handleRaw("downloadSignedQuotation", ({ path, request }) =>
+      Effect.gen(function* () {
+        const row = yield* HttpCqrs.query(GetBooking)({ payload: { bookingId: path.bookingId }, request })
+        const fileName = row.signedFileName
+        if (fileName === undefined) {
+          return yield* Effect.fail(
+            new NotFoundProblem({
+              error: "NotFound",
+              message: `no signed document uploaded for booking ${path.bookingId}`,
+            }),
+          )
+        }
+        const files = yield* FileStore
+        const content = yield* files.read(signedDocumentPath(path.bookingId, fileName)).pipe(
+          Effect.catchTag("FileNotFound", () =>
+            Effect.fail(
+              new NotFoundProblem({
+                error: "NotFound",
+                message: `signed document of booking ${path.bookingId} not found`,
+              }),
+            ),
+          ),
+        )
+        return documentResponse(content, fileName)
       }),
     ),
 )
