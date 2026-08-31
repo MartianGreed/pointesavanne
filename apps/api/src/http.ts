@@ -23,11 +23,14 @@ import {
   BookingRow,
   CheckAvailability,
   ClaimQuotationLeads,
+  DefineSeason,
   FileStore,
   GetBooking,
   GetProfile,
   ListAllBookings,
   ListMyBookings,
+  ListSeasons,
+  RemoveSeason,
   RequestQuotation,
   SaveProfile,
   SignQuotation,
@@ -101,6 +104,12 @@ const customers = ApiGroup.make("customers")
   .add(HttpCqrs.commandEndpoint("saveProfile", "/customers/profile", SaveProfile))
   .add(HttpCqrs.queryEndpoint("getProfile", "/customers/profile", GetProfile))
 
+// The owner's rate card: seasonal prices per period.
+const pricing = ApiGroup.make("pricing")
+  .add(HttpCqrs.commandEndpoint("defineSeason", "/pricing/seasons", DefineSeason))
+  .add(HttpCqrs.commandEndpoint("removeSeason", "/pricing/seasons/removal", RemoveSeason))
+  .add(HttpCqrs.queryEndpoint("listSeasons", "/pricing/seasons", ListSeasons))
+
 const session = ApiGroup.make("session").add(
   ApiEndpoint.get("me")`/me`.addSuccess(
     Schema.Struct({
@@ -114,6 +123,7 @@ const session = ApiGroup.make("session").add(
 export const appApi = Api.make("pointesavanne")
   .add(bookings)
   .add(customers)
+  .add(pricing)
   .add(session)
   .add(Health.group)
   .pipe(annotate({ title: "Villa Pointe Savanne API", version: "1.0.0" }))
@@ -179,6 +189,13 @@ const CustomersLive = HttpApiBuilder.group(appApi, "customers", (handlers) =>
     .handle("getProfile", HttpCqrs.query(GetProfile)),
 )
 
+const PricingLive = HttpApiBuilder.group(appApi, "pricing", (handlers) =>
+  handlers
+    .handle("defineSeason", HttpCqrs.command(DefineSeason))
+    .handle("removeSeason", HttpCqrs.command(RemoveSeason))
+    .handle("listSeasons", HttpCqrs.query(ListSeasons)),
+)
+
 /** GET /me — the session's principal and its policy-derived permissions. */
 const SessionLive = HttpApiBuilder.group(appApi, "session", (handlers) =>
   handlers.handle("me", () =>
@@ -200,7 +217,7 @@ const SessionLive = HttpApiBuilder.group(appApi, "session", (handlers) =>
 )
 
 export const ApiLive = HttpApiBuilder.api(appApi).pipe(
-  Layer.provide([BookingsLive, CustomersLive, SessionLive, Health.layer(appApi)]),
+  Layer.provide([BookingsLive, CustomersLive, PricingLive, SessionLive, Health.layer(appApi)]),
   Layer.provide(Authorization.layer(policy)),
 )
 

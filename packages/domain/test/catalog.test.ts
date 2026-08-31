@@ -1,5 +1,17 @@
 import { describe, expect, test } from "bun:test"
-import { cardHorizon, defaultVilla, seasonalRangesForYear } from "../src/catalog.ts"
+import { Effect, Layer, Scope } from "effect"
+import { AggregateStore, InMemoryAll, type EventStore } from "@structure-ai/eventsourcing"
+import {
+  RateCardVillaCatalog,
+  VillaCatalog,
+  cardHorizon,
+  defaultVilla,
+  ensureRateCard,
+  seedSeasons,
+  seasonalRangesForYear,
+} from "../src/catalog.ts"
+import { RateCard, rateCardIdOf, seasonIdOf } from "../src/ratecard/ratecard.ts"
+import { rateCardRegistry } from "../src/events.ts"
 import { PricingContext } from "../src/booking/pricing.ts"
 
 describe("seasonalRangesForYear (recurring rate card)", () => {
@@ -77,5 +89,86 @@ describe("defaultVilla (production card)", () => {
       `${currentYear + 2}-09-12`,
     )
     expect(ctx.total().cents).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * Runs a program against the production catalog over a fresh in-memory
+ * event store (one card per run — tests stay isolated).
+ */
+const withCatalog = async <E>(
+  program: Effect.Effect<void, E, VillaCatalog | EventStore>,
+): Promise<void> => {
+  const scope = Effect.runSync(Scope.make())
+  const layer = Layer.provideMerge(RateCardVillaCatalog, InMemoryAll)
+  const context = await Effect.runPromise(Layer.buildWithScope(layer, scope))
+  await Effect.runPromise(Effect.provide(program, Layer.succeedContext(context)))
+  await Effect.runPromise(Scope.close(scope, Effect.void as never))
+}
+
+describe("RateCardVillaCatalog (owner-managed card)", () => {
+  test("the seeded card prices exactly like the code card it replaced", async () => {
+    await withCatalog(
+      Effect.gen(function* () {
+        const catalog = yield* VillaCatalog
+        const villa = yield* catalog.find(defaultVilla.villaId)
+        const stays: ReadonlyArray<readonly [string, string]> = [
+          ["2022-05-30", "2022-06-13"], // legacy, two seasons
+          ["2023-02-06", "2023-02-27"], // legacy, with duration discount
+          ["2026-09-05", "2026-09-12"], // the horizon that broke the funnel
+          ["2026-12-20", "2027-01-08"], // cross-year holiday
+        ]
+        for (const [from, to] of stays) {
+          const seeded = PricingContext.create(villa.seasonalRanges, villa.discountRanges, from, to).total().cents
+          const code = PricingContext.create(defaultVilla.seasonalRanges, defaultVilla.discountRanges, from, to).total().cents
+          expect(seeded).toBe(code)
+        }
+      }),
+    )
+  })
+
+  test("an unknown villa is still a NotFound", async () => {
+    await withCatalog(
+      Effect.gen(function* () {
+        const catalog = yield* VillaCatalog
+        const outcome = yield* Effect.either(catalog.find("villa-unknown"))
+        expect(outcome._tag).toBe("Left")
+      }),
+    )
+  })
+
+  test("owner edits flow into pricing: define prices a once-uncovered stay, remove unprices it", async () => {
+    await withCatalog(
+      Effect.gen(function* () {
+        const catalog = yield* VillaCatalog
+        yield* ensureRateCard(defaultVilla.villaId, seedSeasons())
+
+        const store = yield* AggregateStore.make(RateCard, rateCardRegistry)
+        const cardId = rateCardIdOf(defaultVilla.villaId)
+        yield* store.executeWithRetry(cardId, {
+          _tag: "DefineSeason",
+          id: cardId,
+          villaId: defaultVilla.villaId,
+          from: "2099-01-05",
+          to: "2099-02-05",
+          weeklyAmount: 1400,
+        })
+
+        const villa = yield* catalog.find(defaultVilla.villaId)
+        const priced = PricingContext.create(villa.seasonalRanges, villa.discountRanges, "2099-01-12", "2099-01-19")
+        expect(priced.total().cents).toBe(140000)
+
+        yield* store.executeWithRetry(cardId, {
+          _tag: "RemoveSeason",
+          id: cardId,
+          villaId: defaultVilla.villaId,
+          seasonId: seasonIdOf("2099-01-05", "2099-02-05"),
+        })
+        const afterRemoval = yield* catalog.find(defaultVilla.villaId)
+        expect(() =>
+          PricingContext.create(afterRemoval.seasonalRanges, afterRemoval.discountRanges, "2099-01-12", "2099-01-19"),
+        ).toThrow()
+      }),
+    )
   })
 })

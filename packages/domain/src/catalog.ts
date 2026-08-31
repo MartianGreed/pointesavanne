@@ -1,18 +1,22 @@
 import { NotFound } from "@structure-ai/domain"
+import { AggregateStore, type EventStore } from "@structure-ai/eventsourcing"
 import { Context, Effect, Layer, Option } from "effect"
 import type { SeasonalRange, VillaPricing } from "./booking/pricing.ts"
+import { rateCardRegistry } from "./events.ts"
+import { RateCard, engineRangeOf, ownerPeriodOf, rateCardIdOf, type RateCardState, type Season } from "./ratecard/ratecard.ts"
 
 /**
- * The villa catalog: seasonal pricing, discounts and deposits per villa.
- *
- * Today the catalog is code (the current Pointe Savanne rate card, identical
- * to the legacy fixtures); the BDD features drive it through the test layer so
- * their fixture tables stay authoritative. When pricing becomes editable at
- * runtime it graduates to its own aggregate — this port is the seam.
+ * The villa catalog: identity, deposits and discounts per villa (code), plus
+ * the seasonal prices — the owner's RateCard aggregate since the card
+ * graduated from hardcoded ranges. The BDD features drive their fixture
+ * villas through the test layer (MutableVillaCatalog) so their tables stay
+ * authoritative; production binds RateCardVillaCatalog, which seeds the
+ * owner's card once from `defaultVilla` and then serves whatever the owner
+ * defined.
  */
 export class VillaCatalog extends Context.Tag("pointesavanne/VillaCatalog")<
   VillaCatalog,
-  { readonly find: (villaId: string) => Effect.Effect<VillaPricing, NotFound> }
+  { readonly find: (villaId: string) => Effect.Effect<VillaPricing, NotFound, EventStore> }
 >() {}
 
 export const villaNotFound = (villaId: string): NotFound => new NotFound({ entity: "villa", id: villaId })
@@ -90,11 +94,56 @@ export const defaultVilla: VillaPricing = {
   ],
 }
 
-export const StaticVillaCatalog = Layer.succeed(
+/**
+ * The default card as owner periods — the one-time seed of the RateCard
+ * aggregate: each legacy engine range becomes the period it actually made
+ * priceable, so the seeded card prices exactly like the code card did.
+ */
+export const seedSeasons = (): ReadonlyArray<Season> =>
+  defaultVilla.seasonalRanges.flatMap((range) => {
+    const period = ownerPeriodOf(range)
+    return period === null ? [] : [period]
+  })
+
+/**
+ * Loads the villa's card, initializing it from `seed` on first access
+ * (idempotent; a lost initialization race falls back to the winner's card).
+ * The aggregate store is authoritative — pricing and the owner console both
+ * read this, never a projection, so the card is always current.
+ */
+export const ensureRateCard = (
+  villaId: string,
+  seed: ReadonlyArray<Season> = [],
+): Effect.Effect<RateCardState, never, EventStore> =>
+  Effect.flatMap(AggregateStore.make(RateCard, rateCardRegistry), (store) => {
+    const id = rateCardIdOf(villaId)
+    return store.executeWithRetry(id, { _tag: "InitializeRateCard", id, villaId, seasons: seed }).pipe(
+      Effect.map((result) => result.state),
+      // Initialize is a no-op on an initialized card, so a failure here means
+      // a concurrent first-access won the race — the winner's card is the
+      // state to read. Decode defects still die.
+      Effect.catchAll(() => Effect.map(store.load(id), (loaded) => loaded.state)),
+      Effect.catchTag("EventDecodeError", (error) => Effect.die(error)),
+    )
+  })
+
+/** The villa the rate card administers — today a single-villa catalog. */
+export const knownVillaId = (): string => defaultVilla.villaId
+
+/**
+ * The production catalog: villa identity, deposits and discounts from code,
+ * seasonal prices from the owner's RateCard aggregate (seeded once from the
+ * legacy card above, then owned by the operator).
+ */
+export const RateCardVillaCatalog = Layer.succeed(
   VillaCatalog,
   VillaCatalog.of({
     find: (villaId) =>
-      villaId === defaultVilla.villaId ? Effect.succeed(defaultVilla) : Effect.fail(villaNotFound(villaId)),
+      Effect.gen(function* () {
+        if (villaId !== defaultVilla.villaId) return yield* Effect.fail(villaNotFound(villaId))
+        const card = yield* ensureRateCard(villaId, seedSeasons())
+        return { ...defaultVilla, seasonalRanges: card.seasons.map(engineRangeOf) }
+      }),
   }),
 )
 

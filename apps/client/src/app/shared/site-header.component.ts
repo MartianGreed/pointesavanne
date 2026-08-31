@@ -66,6 +66,9 @@ type HeaderVariant = 'overlay' | 'solid' | 'owner';
                 <a routerLink="/proprietaire/reservations" class="nav-link">{{
                   i18n.t('navigation.management')
                 }}</a>
+                <a routerLink="/proprietaire/tarifs" class="nav-link">{{
+                  i18n.t('navigation.seasonPricing')
+                }}</a>
               }
               <button type="button" class="btn-ghost nav-cta" (click)="signOut()">
                 {{ i18n.t('navigation.signOut') }}

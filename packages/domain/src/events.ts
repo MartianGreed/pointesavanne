@@ -2,8 +2,9 @@ import { EventRegistry } from "@structure-ai/eventsourcing"
 import { eventRegistryEntries, type BookingEvent } from "./booking/booking.ts"
 import { leadEventRegistryEntries, type LeadEvent } from "./lead/lead.ts"
 import { profileEventRegistryEntries, type ProfileEvent } from "./customer/profile.ts"
+import { rateCardEventRegistryEntries, type RateCardEvent } from "./ratecard/ratecard.ts"
 
-export type AppEvent = BookingEvent | ProfileEvent | LeadEvent
+export type AppEvent = BookingEvent | ProfileEvent | LeadEvent | RateCardEvent
 
 /** Booking events only — the Booking aggregate's store. */
 export const bookingRegistry = EventRegistry.make(eventRegistryEntries)
@@ -14,9 +15,13 @@ export const profileRegistry = EventRegistry.make(profileEventRegistryEntries)
 /** Lead events only — the QuotationLead aggregate's store. */
 export const leadRegistry = EventRegistry.make(leadEventRegistryEntries)
 
+/** Rate card events only — the RateCard aggregate's store. */
+export const rateCardRegistry = EventRegistry.make(rateCardEventRegistryEntries)
+
 /** Every event, for projections reading the global feed. */
 export const registry = EventRegistry.make([
   ...eventRegistryEntries,
   ...profileEventRegistryEntries,
   ...leadEventRegistryEntries,
+  ...rateCardEventRegistryEntries,
 ])

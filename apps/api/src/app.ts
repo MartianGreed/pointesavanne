@@ -9,7 +9,7 @@ import {
   AuthorizerLive,
   ConsoleMailer,
   DomainConfigTag,
-  StaticVillaCatalog,
+  RateCardVillaCatalog,
   VillaCatalog,
   HtmlQuotationPdf,
   LocalFileStore,
@@ -59,7 +59,10 @@ const MigrationsLive = Migrations.layer(prodMigrations).pipe(Layer.provide(bookk
 const EventSourcingLive = storesLayer({ tablePrefix: "es_" })
 
 const PortsLive = Layer.mergeAll(
-  StaticVillaCatalog as Layer.Layer<VillaCatalog>,
+  // The rate card is owner-managed data: the catalog reads the RateCard
+  // aggregate (seeding it once from the legacy card), so it needs the event
+  // store provided further down the stack.
+  RateCardVillaCatalog as Layer.Layer<VillaCatalog>,
   ConsoleMailer as Layer.Layer<Mailer>,
   HtmlQuotationPdf as Layer.Layer<QuotationPdf>,
   Layer.unwrapEffect(
