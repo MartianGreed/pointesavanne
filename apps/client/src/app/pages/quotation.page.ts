@@ -1,4 +1,4 @@
-import { Component, afterNextRender, computed, inject, signal } from '@angular/core';
+import { Component, afterNextRender, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Auth } from '../core/auth.service';
 import { BookingService, VILLA_ID } from '../core/booking.service';
@@ -513,7 +513,14 @@ export class QuotationPage {
       if (stay.arrivee !== '' && stay.depart !== '') void this.checkAvailability();
     });
 
-    if (this.auth.signedIn()) void this.prefillFromProfile();
+    // The session lands asynchronously (App fires Auth.refresh() on boot),
+    // so a one-shot `signedIn()` check here would lose the race on a hard
+    // load of /devis. React to the signal instead: the profile prefill runs
+    // as soon as the session resolves to signed-in — while applyContact
+    // keeps the visitor's own latest input winning (gap-fill only).
+    effect(() => {
+      if (this.auth.signedIn()) void this.prefillFromProfile();
+    });
   }
 
   onArrivee(event: Event): void {
