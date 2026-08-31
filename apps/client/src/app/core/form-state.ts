@@ -1,11 +1,12 @@
 /**
- * Quotation-form state: priorities, staleness rules and (de)serialization.
- * Pure and DOM-free so the merge logic stays unit-tested; the browser
- * storages are injected by form-storage.ts.
+ * Quotation-form state: priorities and staleness rules.
+ * Pure and DOM-free so the merge logic stays unit-tested; the in-session
+ * carrier is the QuoteFunnelStore (an Angular service), and the durable
+ * record of an anonymous request is the backend's quotation lead.
  *
  * Priority rule (agreed): the freshest intent wins —
- *   stay:      query params (just came from the landing) > sessionStorage > defaults
- *   contact:   localStorage > profile (fills the gaps only)
+ *   stay:      query params (just came from the landing) > funnel store > defaults
+ *   contact:   funnel store > profile (fills the gaps only)
  */
 
 export interface StayState {

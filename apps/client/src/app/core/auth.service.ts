@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from "@angular/core"
 import { Api } from "./api"
-import { clearContact } from "./form-storage"
+import { QuoteFunnelStore } from "./quote-funnel.store"
 import {
   authenticatePasskey,
   createPasskey,
@@ -25,12 +25,15 @@ export interface Me {
 
 /**
  * Authentication state over the API's cookie sessions (HttpOnly — the client
- * never touches the token). Registration is a two-step flow: auth register,
- * then the profile is saved once the session exists.
+ * never touches the token). Registration stays a two-step flow (auth
+ * register → e-mail verification), but nothing is lost in between: the
+ * devis funnel's intent lives on the backend as a quotation lead, claimed
+ * automatically at the first sign-in.
  */
 @Injectable({ providedIn: "root" })
 export class Auth {
   readonly #api = inject(Api)
+  readonly #funnel = inject(QuoteFunnelStore)
   readonly #user = signal<SessionUser | null | undefined>(undefined)
   readonly #permissions = signal<readonly string[]>([])
 
@@ -70,7 +73,8 @@ export class Auth {
     } finally {
       this.#user.set(null)
       this.#permissions.set([])
-      clearContact()
+      // D1: the session's funnel draft (PII included) dies with it.
+      this.#funnel.reset()
     }
   }
 

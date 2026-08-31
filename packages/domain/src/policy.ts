@@ -2,6 +2,7 @@ import { Condition, CqrsAuthorization, Policy, Principal } from "@structure-ai/a
 import type { Effect } from "effect"
 import {
   CheckAvailability,
+  ClaimQuotationLeads,
   GenerateQuotation,
   GetBooking,
   GetProfile,
@@ -10,6 +11,7 @@ import {
   RequestQuotation,
   SaveProfile,
   SignQuotation,
+  SubmitQuotationLead,
   ValidateQuotation,
 } from "./messages/index.ts"
 
@@ -22,6 +24,7 @@ export const policy = Policy.define({
   resources: {
     booking: ["request", "generate", "read-own", "list-own", "sign", "read-all", "validate"],
     profile: ["read", "save"],
+    lead: ["submit", "claim"],
   },
   conditions: {
     owner: Condition.owner(),
@@ -32,6 +35,7 @@ export const policy = Policy.define({
         "booking:request",
         "booking:list-own",
         "booking:sign",
+        "lead:claim",
         "profile:read",
         "profile:save",
         { permission: "booking:read-own", when: "owner" },
@@ -66,5 +70,9 @@ export const AuthorizerLive = CqrsAuthorization.rules(policy)
   .message(ListAllBookings, "booking:read-all")
   .message(SaveProfile, "profile:save")
   .message(GetProfile, "profile:read")
+  .message(ClaimQuotationLeads, "lead:claim")
+  // The public funnel: anyone may ask for a devis (the lead is claimed only
+  // by the verified owner of that e-mail, at sign-in).
   .public(CheckAvailability)
+  .public(SubmitQuotationLead)
   .layer

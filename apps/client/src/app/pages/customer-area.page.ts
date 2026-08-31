@@ -5,6 +5,7 @@ import { Auth } from "../core/auth.service"
 import { passkeyErrorMessage } from "../core/passkey-errors"
 import { BookingService, type BookingRow } from "../core/booking.service"
 import { ProfileService, type Profile } from "../core/profile.service"
+import { QuoteFunnelStore } from "../core/quote-funnel.store"
 import { longDate, statusStyle } from "../shared/booking-status"
 import { euros } from "../shared/estimate"
 
@@ -53,6 +54,9 @@ interface DocumentRow {
       <div class="content">
         @if (onglet() === "reservations") {
           <h1 class="page-title">Mes réservations</h1>
+          @if (claimIssue(); as issue) {
+            <div class="box box-err">{{ issue }}</div>
+          }
           @if (bookings().length === 0) {
             <div class="card empty">
               <p>Aucune demande pour le moment.</p>
@@ -458,6 +462,7 @@ export class CustomerAreaPage {
   readonly #auth = inject(Auth)
   readonly #profiles = inject(ProfileService)
   readonly #bookings = inject(BookingService)
+  readonly #funnel = inject(QuoteFunnelStore)
 
   readonly tabs: readonly { id: Tab; label: string }[] = [
     { id: "reservations", label: "Mes réservations" },
@@ -494,6 +499,13 @@ export class CustomerAreaPage {
   })
 
   readonly emailProfil = computed(() => this.profile()?.email ?? this.#auth.user()?.email ?? "")
+
+  /** Why a lead claimed at sign-in produced no booking, when that happened. */
+  readonly claimIssue = computed(() => {
+    const result = this.#funnel.claimResult()
+    if (result === null || result.issues.length === 0) return null
+    return `Votre demande n'a pas pu être enregistrée : ${result.issues.join(" ; ")}. Vous pouvez renouveler la demande avec d'autres dates.`
+  })
 
   readonly documents = computed<DocumentRow[]>(() => {
     const rows: DocumentRow[] = []

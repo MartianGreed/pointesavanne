@@ -14,10 +14,11 @@ PostgreSQL for durability and an **Angular 22** client (SSR + SPA, French).
 ```
 packages/
 └── domain/    @pointesavanne/domain — the business domain, reusable across
-                apps: booking & profile aggregates, pricing engine, villa
-                catalog, message contracts, access policy, handlers, views &
-                projections, ports (mailer, files, quotation PDF, auth),
-                in-memory test composition, feature suite on @structure-ai/bdd
+                apps: booking, quotation-lead and profile aggregates, pricing
+                engine, villa catalog, message contracts, access policy,
+                handlers, views & projections, ports (mailer, files,
+                quotation PDF, auth), in-memory test composition, feature
+                suite on @structure-ai/bdd
 apps/
 ├── api/       thin host over the domain: HTTP surface (OpenAPI at /docs),
 │              production adapters (PostgreSQL event store & auth, local
@@ -50,7 +51,7 @@ bun run check
 | Command | What it covers |
 | --- | --- |
 | `bun run test` | pricing engine & booking aggregate (`packages/domain`), HTTP surface (`apps/api`: real sockets, real policy stack, in-memory adapters) |
-| `bun run test:features` | the BDD suite in `packages/domain` (`@structure-ai/bdd` on `bun test`, 23 scenarios) driving commands/queries and the auth service end to end |
+| `bun run test:features` | the BDD suite in `packages/domain` (`@structure-ai/bdd` on `bun test`, 28 scenarios) driving commands/queries and the auth service end to end |
 | `bun test test/pg.test.ts` (in `apps/api`, needs `DATABASE_URL`) | migrations + event store + projections + auth store over real PostgreSQL |
 
 ## Architecture
@@ -65,10 +66,27 @@ live-gated so rebuilds never resend emails).
 - **Credentials** live in `@structure-ai/auth` (password lifecycle, opaque
   cookie sessions, mandatory e-mail verification); the profile aggregate owns
   the booking-relevant customer data. Registration on the client = auth
-  register, then profile save after sign-in.
+  register → e-mail verification → sign-in; nothing is lost in between: the
+  devis intent submitted before the account exists is a server-side
+  **quotation lead**, claimed automatically at the first sign-in.
+- **Conversion funnel**: an anonymous "Demander mon devis" persists a
+  `QuotationLead` (event-sourced, keyed by the normalized e-mail — one
+  unclaimed lead per address, the newest submission wins). `ClaimQuotationLeads`
+  (dispatched by the client right after every sign-in, the e-mail derived
+  from the session — never from a payload) fills an absent profile from the
+  lead's contact and creates the booking request through the same
+  orchestration as `RequestQuotation`; the lead is claimed *before* the
+  booking is created, so a concurrent claim is a no-op rather than a double
+  booking, and a booking that cannot be created (dates since taken) is
+  reported as an issue on a consumed lead. The client keeps only an in-memory
+  Angular store (`QuoteFunnelStore`) for same-session prefill — no browser
+  storage: the backend is the source of truth, and nothing (PII included)
+  outlives the tab or the session (sign-out wipes the store).
 - **Authorization**: a typed policy (customer/owner/system roles). The bus
   denies unmapped messages; row-level ownership is checked in the query
-  handler. Anonymous dispatches are denied at the bus (403 `Unauthorized`).
+  handler. Anonymous dispatches are denied at the bus (403 `Unauthorized`)
+  except the public funnel messages (availability check, quotation-lead
+  submission), and the lead claim requires a session.
 - **Pricing**: the legacy algorithm is ported 1:1 (cent rounding included) and
   pinned by the BDD scenarios — see `packages/domain/src/booking/pricing.ts`.
 - **Availability** is answered from the (eventually consistent) booking view;

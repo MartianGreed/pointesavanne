@@ -1,6 +1,25 @@
 import { Injectable, inject } from "@angular/core"
 import { Api } from "./api"
 
+export interface LeadSubmission {
+  readonly email: string
+  readonly firstname: string
+  readonly lastname: string
+  readonly phoneNumber: string
+  readonly villaId: string
+  readonly from: string
+  readonly to: string
+  readonly adultsCount: number
+  readonly childrenCount: number
+  readonly message?: string
+}
+
+export interface ClaimOutcome {
+  readonly claimed: number
+  readonly bookings: ReadonlyArray<{ bookingId: string; status: string; pricing: Record<string, number> }>
+  readonly issues: readonly string[]
+}
+
 export interface BookingRow {
   readonly bookingId: string
   readonly customerId: string
@@ -35,8 +54,25 @@ export const VILLA_ID = "villa-de-standing-pointe-savanne"
 export class BookingService {
   readonly #api = inject(Api)
 
-  requestQuotation(input: { villaId: string; from: string; to: string; adultsCount: number; childrenCount: number }): Promise<{ bookingId: string; status: string; pricing: Record<string, number> }> {
+  requestQuotation(input: {
+    villaId: string
+    from: string
+    to: string
+    adultsCount: number
+    childrenCount: number
+    message?: string
+  }): Promise<{ bookingId: string; status: string; pricing: Record<string, number> }> {
     return this.#api.post("/bookings/quotation", input)
+  }
+
+  /** The anonymous devis funnel: the backend keeps the intent as a lead. */
+  submitLead(input: LeadSubmission): Promise<{ leadId: string; status: string }> {
+    return this.#api.post("/bookings/leads", input)
+  }
+
+  /** Converts the signed-in customer's pending lead (e-mail derived server-side). */
+  claimLeads(): Promise<ClaimOutcome> {
+    return this.#api.post("/bookings/leads/claim", {})
   }
 
   myBookings(): Promise<{ items: BookingRow[] }> {

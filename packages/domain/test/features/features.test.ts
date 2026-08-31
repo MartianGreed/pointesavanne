@@ -2,6 +2,7 @@ import { defineFeatureSuite } from "@structure-ai/bdd"
 import { buildWorld, type DomainWorld, type WorldServices } from "../composition.ts"
 import { bookingSteps } from "./steps/booking.steps.ts"
 import { customerSteps } from "./steps/customer.steps.ts"
+import { leadSteps } from "./steps/lead.steps.ts"
 
 /**
  * The feature suite: compiles every `.feature` file into ordinary `bun test`
@@ -13,5 +14,5 @@ import { customerSteps } from "./steps/customer.steps.ts"
 defineFeatureSuite<DomainWorld, WorldServices>({
   features: "test/features/**/*.feature",
   makeWorld: buildWorld,
-  steps: [...bookingSteps, ...customerSteps],
+  steps: [...bookingSteps, ...customerSteps, ...leadSteps],
 })

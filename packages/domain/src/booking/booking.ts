@@ -32,6 +32,7 @@ export const BookingRequested = DomainEvent.define("BookingRequested", {
   childrenCount: Schema.Number,
   nights: Schema.Number,
   pricing: PricingSchema,
+  message: Schema.optional(Schema.String),
 })
 
 export const QuotationGenerated = DomainEvent.define("QuotationGenerated", {
@@ -87,6 +88,7 @@ export type BookingCommand =
       readonly to: string
       readonly adultsCount: number
       readonly childrenCount: number
+      readonly message?: string
     }
   | {
       readonly _tag: "GenerateQuotation"
@@ -152,6 +154,7 @@ export const Booking = Aggregate.define<BookingState, BookingCommand, BookingEve
             childrenCount: command.childrenCount,
             nights: dates.daysBetween(dates.parse(command.from), dates.parse(command.to)),
             pricing,
+            ...(command.message !== undefined && command.message !== "" ? { message: command.message } : {}),
           }),
         ])
       }

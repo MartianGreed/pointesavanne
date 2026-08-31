@@ -4,7 +4,7 @@ import { Auth } from "../core/auth.service"
 import { BookingService, VILLA_ID } from "../core/booking.service"
 import { ProfileService } from "../core/profile.service"
 import { fillContactGaps, fillStayGaps, nightsBetween, type ContactState } from "../core/form-state"
-import { readContact, readStay, setDevisIntent, writeContact, writeStay } from "../core/form-storage"
+import { QuoteFunnelStore } from "../core/quote-funnel.store"
 import { euros, estimateStay } from "../shared/estimate"
 
 type Availability = "unknown" | "checking" | "available" | "unavailable" | "invalid"
@@ -391,6 +391,7 @@ export class QuotationPage {
   readonly auth = inject(Auth)
   readonly #bookings = inject(BookingService)
   readonly #profiles = inject(ProfileService)
+  readonly #funnel = inject(QuoteFunnelStore)
 
   readonly arrivee = signal("")
   readonly depart = signal("")
@@ -443,12 +444,13 @@ export class QuotationPage {
     afterNextRender(() => {
       const stay = fillStayGaps(
         { arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() },
-        readStay(),
+        this.#funnel.stay(),
       )
       this.arrivee.set(stay.arrivee)
       this.depart.set(stay.depart)
       this.voyageurs.set(stay.voyageurs)
-      this.applyContact(readContact())
+      this.applyContact(this.#funnel.contact())
+      this.message.set(this.#funnel.message())
       if (stay.arrivee !== "" && stay.depart !== "") void this.checkAvailability()
     })
 
@@ -500,10 +502,32 @@ export class QuotationPage {
     this.persistContact()
 
     // F1: sending the request requires an account — but nothing is lost:
-    // the whole form is persisted and login returns straight here.
+    // the whole form is submitted as a server-side quotation lead, and the
+    // claim at sign-in turns it into the real quotation request.
     if (!this.auth.signedIn()) {
-      setDevisIntent()
-      await this.#router.navigate(["/connexion"])
+      this.busy.set(true)
+      this.formError.set("")
+      try {
+        await this.#bookings.submitLead({
+          email: this.email(),
+          firstname: this.prenom(),
+          lastname: this.nom(),
+          phoneNumber: this.tel(),
+          villaId: VILLA_ID,
+          from: this.arrivee(),
+          to: this.depart(),
+          adultsCount: Number(this.voyageurs()),
+          childrenCount: 0,
+          ...(this.message() !== "" ? { message: this.message() } : {}),
+        })
+        this.#funnel.markPendingLead()
+        await this.#router.navigate(["/connexion"], { queryParams: { mode: "inscription" } })
+      } catch (e) {
+        const problem = e as { problem?: { issues?: string[]; message?: string } }
+        this.formError.set(problem.problem?.issues?.[0] ?? problem.problem?.message ?? "Demande impossible.")
+      } finally {
+        this.busy.set(false)
+      }
       return
     }
 
@@ -527,6 +551,7 @@ export class QuotationPage {
         to: this.depart(),
         adultsCount: Number(this.voyageurs()),
         childrenCount: 0,
+        ...(this.message() !== "" ? { message: this.message() } : {}),
       })
       this.result.set({
         nights,
@@ -574,11 +599,12 @@ export class QuotationPage {
   }
 
   private persistStay(): void {
-    writeStay({ arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() })
+    this.#funnel.patchStay({ arrivee: this.arrivee(), depart: this.depart(), voyageurs: this.voyageurs() })
   }
 
   private persistContact(): void {
-    writeContact({ prenom: this.prenom(), nom: this.nom(), email: this.email(), tel: this.tel() })
+    this.#funnel.patchContact({ prenom: this.prenom(), nom: this.nom(), email: this.email(), tel: this.tel() })
+    this.#funnel.setMessage(this.message())
   }
 
   private async checkAvailability(): Promise<void> {
