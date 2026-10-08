@@ -10,7 +10,9 @@
     "FILES_DIR",
     "LOG_LEVEL",
     "LOG_FORMAT",
-    "OTLP_URL"
+    "OTLP_URL",
+    "NG_ALLOWED_HOSTS",
+    "NG_TRUST_PROXY_HEADERS"
   ],
   "tasks": {
     "build": {

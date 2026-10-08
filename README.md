@@ -47,6 +47,41 @@ Full check (typecheck, tests, features, build):
 bun run check
 ```
 
+### Contremaitre
+
+On a Mac with Contremaitre and its native runtime installed, run these commands
+from the checkout you want to preview:
+
+```sh
+contremaitre ensure --json
+contremaitre verify --profile smoke --json
+contremaitre report --json
+```
+
+The report gives the local HTTPS client and API URLs. Contremaitre runs the
+existing Bun/Turbo development runner with Node 26 for Angular, managed
+PostgreSQL and a persistent volume for quotations and uploaded documents.
+The client proxies API requests within the same container. `BASE_URL` uses the
+client's HTTPS origin for auth links and passkeys.
+
+The manifest loads `.env.dist` for development defaults. To use personal values,
+change `env_file` to `.env` or `[.env, .env.local]` after creating those files in
+that checkout. Explicit manifest settings override the env files.
+
+The smoke profile checks the rendered page, API documentation, same-origin auth
+and booking proxies, database connectivity and migrations. Run the full
+typecheck, unit, HTTP, PostgreSQL, BDD and build checks with:
+
+```sh
+contremaitre verify --profile check --json
+```
+
+This profile runs tasks one at a time and creates and removes a temporary database
+so the PostgreSQL tests' table cleanup cannot affect preview data. It runs every
+check even if an earlier check fails, and returns a failure if any check fails.
+Both configuration files,
+`.contremaitre.yaml` and `.contremaitre.lock`, belong in version control.
+
 ## Testing
 
 | Command | What it covers |

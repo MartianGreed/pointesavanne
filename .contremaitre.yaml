@@ -1,0 +1,42 @@
+project: pointesavanne
+apps:
+  app:
+    build: .
+    dockerfile: Dockerfile.dev
+    command: [bun, run, dev]
+    # Bun SQL interprets an existing /app directory as the managed DB's socket path.
+    working_dir: /workspace
+    endpoints: {api: 3000, web: 4200}
+    cpus: 2
+    memory: 4G
+    env_file: .env.dist
+    environment:
+      DATABASE_URL: '{{db.url}}'
+      BASE_URL: '{{web.browser_url}}'
+      FILES_DIR: /data/files
+      NG_ALLOWED_HOSTS: 'localhost,127.0.0.1,*.pointesavanne.localhost'
+      NG_TRUST_PROXY_HEADERS: 'x-forwarded-for,x-forwarded-host,x-forwarded-proto'
+    volumes:
+      files: /data/files
+    dev:
+      source: .
+      target: /workspace
+      install: [bun, install, --frozen-lockfile]
+services:
+  db:
+    kind: postgres
+verification:
+  profiles:
+    smoke:
+      - name: https
+        command: [bun, scripts/contremaitre-smoke.ts]
+        timeout_seconds: 120
+      - name: database
+        service: app
+        command: [bun, scripts/contremaitre-smoke.ts, --database]
+        timeout_seconds: 30
+    check:
+      - name: project-checks
+        service: app
+        command: [bun, scripts/contremaitre-check.ts]
+        timeout_seconds: 600

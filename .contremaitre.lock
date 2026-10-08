@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "config_hash": "d95a79819d9e7b4ca12bc293045192fe25e4bdc1e75f9bb849dfc4b2677efc8b",
+  "apps": {
+    "app": {
+      "path": ".",
+      "defaults": {
+        "image": "",
+        "port": 0,
+        "cpus": 1,
+        "memory": "2G"
+      },
+      "resolved": {
+        "image": "",
+        "build": ".",
+        "dockerfile": "Dockerfile.dev",
+        "command": [
+          "bun",
+          "run",
+          "dev"
+        ],
+        "working_dir": "/workspace",
+        "dev": {
+          "source": ".",
+          "target": "/workspace",
+          "install": [
+            "bun",
+            "install",
+            "--frozen-lockfile"
+          ]
+        },
+        "port": 0,
+        "endpoints": {
+          "api": 3000,
+          "web": 4200
+        },
+        "cpus": 2,
+        "memory": "4G"
+      }
+    }
+  }
+}

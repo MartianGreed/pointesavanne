@@ -1,0 +1,10 @@
+FROM oven/bun:1.3.14 AS bun
+FROM node:26-bookworm
+
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+
+# Apple container exec can make setsid fork; wait for the check's real exit status.
+RUN printf '%s\n' '#!/bin/sh' 'exec /usr/bin/setsid --wait "$@"' \
+    > /usr/local/bin/setsid && chmod +x /usr/local/bin/setsid
+
+WORKDIR /workspace
