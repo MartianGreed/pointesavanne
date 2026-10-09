@@ -160,9 +160,8 @@ part of the generated OpenAPI spec; their contract is documented in
 
 ## Notes & known trade-offs
 
-- **`@structure-ai` 0.0.6 inter-dependencies** are published as a broken
-  `0.0.0` spec; the root `package.json` pins the whole scope via `overrides`
-  until the framework publishes consistent versions.
+- **`@structure-ai`** packages are pinned to `0.4.1`; the framework now
+  publishes matching internal dependency versions without root overrides.
 - **Rate limiter** is in-memory (`allowAllRateLimiter` in tests): honest for
   the current single-instance deployment; move to a shared store before
   scaling horizontally.

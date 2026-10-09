@@ -1,4 +1,5 @@
 import { AggregateStore, EventStore, Inbox, Projection } from "@structure-ai/eventsourcing"
+import type { PersistenceError } from "@structure-ai/domain"
 import { Booking, BookingId } from "./booking/booking.ts"
 import { bookingRegistry } from "./events.ts"
 import { ViewModel, ViewProjection, ViewStore } from "@structure-ai/viewmodel"
@@ -195,7 +196,7 @@ const bookingOf = (bookingId: string) =>
     store.load(BookingId.make(bookingId)).pipe(Effect.orDie),
   )
 
-export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbox | DomainConfigTag | EventStore> =
+export const notifications: Projection.Projection<AppEvent, PersistenceError, Mailer | Inbox | DomainConfigTag | EventStore> =
   Projection.make({
   name: "notifications",
   registry,
@@ -327,7 +328,7 @@ export const notifications: Projection.Projection<AppEvent, never, Mailer | Inbo
 // already-generated booking, so at-least-once delivery never wedges it.
 // ---------------------------------------------------------------------------
 
-export const quotationGenerator: Projection.Projection<AppEvent, never, Inbox | CommandBus> = {
+export const quotationGenerator: Projection.Projection<AppEvent, PersistenceError, Inbox | CommandBus> = {
   name: "quotation-generator",
   registry,
   when: {
@@ -351,7 +352,7 @@ export const quotationGenerator: Projection.Projection<AppEvent, never, Inbox | 
 
 /** Every projection that runs in the application's worker loop. */
 // deno-lint-ignore no-explicit-any
-export const allProjections: ReadonlyArray<Projection.Projection<AppEvent, never, any>> = [
+export const allProjections: ReadonlyArray<Projection.Projection<AppEvent, PersistenceError, any>> = [
   bookingViews.projection,
   profileViews.projection,
   notifications,
