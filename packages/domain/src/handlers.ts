@@ -2,7 +2,7 @@ import { AggregateStore, EventDecodeError, type EventStore } from "@structure-ai
 import { SqlError } from "@effect/sql/SqlError"
 import type * as SqlClient from "@effect/sql/SqlClient"
 import { CommandHandler, HandlerRegistry, QueryHandler } from "@structure-ai/cqrs"
-import { ConcurrencyConflict, EntityId, InvariantViolation, NotFound, ValidationFailed } from "@structure-ai/domain"
+import { ConcurrencyConflict, EntityId, InvariantViolation, NotFound, PersistenceError, ValidationFailed } from "@structure-ai/domain"
 import { Effect, Option } from "effect"
 import { Booking, BookingId, type BookingStatus, type PricingSnapshot } from "./booking/booking.ts"
 import { dates } from "./booking/pricing.ts"
@@ -96,7 +96,7 @@ const requestBooking = (
   actor: string,
   payload: QuotationRequestInput,
   ids: DispatchIds,
-): Effect.Effect<QuotationResult, NotFound | ValidationFailed | InvariantViolation | ConcurrencyConflict, VillaCatalog | EventStore | SqlClient.SqlClient> =>
+): Effect.Effect<QuotationResult, NotFound | ValidationFailed | InvariantViolation | ConcurrencyConflict | PersistenceError, VillaCatalog | EventStore | SqlClient.SqlClient> =>
   Effect.gen(function* () {
     const catalog = yield* VillaCatalog
     const villa = yield* catalog.find(payload.villaId)

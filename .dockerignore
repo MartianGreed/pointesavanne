@@ -1,0 +1,14 @@
+.git
+.jj
+workspace
+node_modules
+**/node_modules
+.env*
+*.pem
+*.key
+**/dist
+**/.angular
+.turbo
+reports
+coverage
+var

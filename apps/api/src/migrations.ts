@@ -16,6 +16,8 @@ export const prodMigrations = makeSet([
   defineMigration(1, "event_store_tables", migrateEventStorePg({ tablePrefix: "es_" })),
   ViewModel.migration(BookingView, 2),
   ViewModel.migration(CustomerProfileView, 3),
+  // Existing installs already recorded migration 1 under the old package.
+  defineMigration(4, "event_store_0_4_1_upgrade", migrateEventStorePg({ tablePrefix: "es_" })),
 ])
 
 /**

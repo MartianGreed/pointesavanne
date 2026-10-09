@@ -34,7 +34,7 @@ const buildAppAuth = (config: ApiConfig): Effect.Effect<AppAuth, never, Mailer> 
       rateLimiter: allowAllRateLimiter,
     })
 
-    const http = makeAuthHandler(auth, { resolveTenant: () => Effect.succeed(TENANT_ID) })
+    const http = yield* makeAuthHandler(auth, { resolveTenant: () => Effect.succeed(TENANT_ID) }).pipe(Effect.orDie)
     return { auth, handler: http.handler, tenantConfig }
   })
 

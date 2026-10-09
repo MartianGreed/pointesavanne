@@ -1,4 +1,4 @@
-import { NotFound } from "@structure-ai/domain"
+import { NotFound, PersistenceError } from "@structure-ai/domain"
 import { AggregateStore, type EventStore } from "@structure-ai/eventsourcing"
 import { Context, Effect, Layer, Option } from "effect"
 import type { SeasonalRange, VillaPricing } from "./booking/pricing.ts"
@@ -16,7 +16,7 @@ import { RateCard, engineRangeOf, ownerPeriodOf, rateCardIdOf, type RateCardStat
  */
 export class VillaCatalog extends Context.Tag("pointesavanne/VillaCatalog")<
   VillaCatalog,
-  { readonly find: (villaId: string) => Effect.Effect<VillaPricing, NotFound, EventStore> }
+  { readonly find: (villaId: string) => Effect.Effect<VillaPricing, NotFound | PersistenceError, EventStore> }
 >() {}
 
 export const villaNotFound = (villaId: string): NotFound => new NotFound({ entity: "villa", id: villaId })
@@ -114,15 +114,19 @@ export const seedSeasons = (): ReadonlyArray<Season> =>
 export const ensureRateCard = (
   villaId: string,
   seed: ReadonlyArray<Season> = [],
-): Effect.Effect<RateCardState, never, EventStore> =>
+): Effect.Effect<RateCardState, PersistenceError, EventStore> =>
   Effect.flatMap(AggregateStore.make(RateCard, rateCardRegistry), (store) => {
     const id = rateCardIdOf(villaId)
     return store.executeWithRetry(id, { _tag: "InitializeRateCard", id, villaId, seasons: seed }).pipe(
       Effect.map((result) => result.state),
-      // Initialize is a no-op on an initialized card, so a failure here means
-      // a concurrent first-access won the race — the winner's card is the
-      // state to read. Decode defects still die.
-      Effect.catchAll(() => Effect.map(store.load(id), (loaded) => loaded.state)),
+      // A lost initialization race reads the winner; persistence failures
+      // remain typed and cannot be mistaken for a concurrent initialization.
+      Effect.catchTag("ConcurrencyConflict", () => Effect.map(store.load(id), (loaded) => loaded.state)),
+      // InitializeRateCard cannot reject a business rule.
+      Effect.catchTags({
+        InvariantViolation: (error) => Effect.die(error),
+        ValidationFailed: (error) => Effect.die(error),
+      }),
       Effect.catchTag("EventDecodeError", (error) => Effect.die(error)),
     )
   })

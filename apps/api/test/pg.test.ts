@@ -114,6 +114,37 @@ maybe("postgres adapters", () => {
     expect(rows[0]?.status).toBe("quotation-requested")
   })
 
+  test("production migrations upgrade an applied legacy event store without losing history", async () => {
+    // The preceding roundtrip supplies real booking history. Recreate the
+    // pre-upgrade layout with migration 1 already recorded in the ledger.
+    const before = await cleanupSql`SELECT position, stream_name, version, type, payload, metadata FROM es_events ORDER BY position`
+    expect(before.length).toBeGreaterThan(0)
+    await cleanupSql`DELETE FROM effect_sql_migrations WHERE migration_id > 3`
+    await cleanupSql`ALTER TABLE es_events DROP COLUMN IF EXISTS partition`
+    await cleanupSql`DROP TRIGGER IF EXISTS structure_events_insert_notify ON es_events`
+    await cleanupSql`ALTER TABLE es_outbox DROP COLUMN IF EXISTS available_at, DROP COLUMN IF EXISTS claim_token, DROP COLUMN IF EXISTS lease_until`
+    for (const table of ["es_history_import_batches", "es_history_imports", "es_erased_streams", "es_idempotency"]) {
+      await cleanupSql.unsafe(`DROP TABLE IF EXISTS ${table} CASCADE`)
+    }
+
+    const applied = await Effect.runPromise(Migrations.run(prodMigrations).pipe(Effect.provide(PgLive)))
+    expect(applied.map(([id]) => id)).toContain(4)
+    const columns = await cleanupSql<Array<{ table_name: string; column_name: string }>>`SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name IN ('es_events', 'es_outbox')`
+    const names = columns.map((row) => `${row.table_name}.${row.column_name}`)
+    expect(names).toContain("es_events.partition")
+    expect(names).toContain("es_outbox.available_at")
+    expect(names).toContain("es_outbox.claim_token")
+    expect(names).toContain("es_outbox.lease_until")
+    const tables = await cleanupSql`SELECT to_regclass('es_history_imports') AS imports, to_regclass('es_erased_streams') AS erased, to_regclass('es_idempotency') AS idempotency`
+    expect(tables[0]?.imports).not.toBeNull()
+    expect(tables[0]?.erased).not.toBeNull()
+    expect(tables[0]?.idempotency).not.toBeNull()
+    const after = await cleanupSql`SELECT position, stream_name, version, type, payload, metadata FROM es_events ORDER BY position`
+    expect(after).toEqual(before)
+    expect(await run(isVillaAvailable(defaultVilla.villaId, "2022-06-01", "2022-06-05"))).toBe(false)
+    expect(await Effect.runPromise(Migrations.run(prodMigrations).pipe(Effect.provide(PgLive)))).toEqual([])
+  })
+
   test("auth store: register, verify and sign in over postgres", async () => {
     const authStore = makeAuthStore(cleanupSql, { tablePrefix: AuthTablePrefix })
     // minimal direct-store checks; the full lifecycle is covered by the

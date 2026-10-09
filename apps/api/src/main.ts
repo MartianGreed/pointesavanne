@@ -1,5 +1,6 @@
 import { SqlClient } from "@effect/sql/SqlClient"
 import { launch, Readiness, Shutdown } from "@structure-ai/runtime"
+import type { PersistenceError } from "@structure-ai/domain"
 import { Projection } from "@structure-ai/eventsourcing"
 import { Cause, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import { allProjections, type AppEvent } from "@pointesavanne/domain"
@@ -19,7 +20,7 @@ const program = Effect.gen(function* () {
   // generator, each polling the global feed. Their services (mailer, buses,
   // domain config) are part of the process context — see productionLayers —
   // and a worker that stops says so instead of dying silently.
-  const workers = allProjections as ReadonlyArray<Projection.Projection<AppEvent, never, never>>
+  const workers = allProjections as ReadonlyArray<Projection.Projection<AppEvent, PersistenceError, never>>
   const fibers = yield* Effect.forEach(workers, (projection) =>
     Effect.fork(
       Projection.run(projection).pipe(
